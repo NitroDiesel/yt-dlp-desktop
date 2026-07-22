@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example

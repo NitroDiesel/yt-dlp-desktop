@@ -1,0 +1,17 @@
+yt-dlp Desktop bundles the following separately executed components.
+
+yt-dlp 2026.07.04
+Copyright and license details: GPL-3.0-or-later for the official combined standalone builds.
+Project and exact source: https://github.com/yt-dlp/yt-dlp/tree/2026.07.04
+Third-party licenses: https://github.com/yt-dlp/yt-dlp/blob/2026.07.04/THIRD_PARTY_LICENSES.txt
+Corresponding source archive: https://github.com/yt-dlp/yt-dlp/releases/download/2026.07.04/yt-dlp.tar.gz
+The complete combined-build notices are included as YT_DLP_THIRD_PARTY_LICENSES.txt.
+
+Deno 2.9.3
+Copyright the Deno authors. Licensed under the MIT License.
+Project and exact source: https://github.com/denoland/deno/tree/v2.9.3
+License: https://github.com/denoland/deno/blob/v2.9.3/LICENSE.md
+The complete license is included as DENO_LICENSE.md.
+
+These component versions are independent from the yt-dlp Desktop application version.
+The release manifest in packaging/components.json records every approved artifact and checksum.

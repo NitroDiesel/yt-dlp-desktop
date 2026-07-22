@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible problem in yt-dlp Desktop
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: Do not include cookies, credentials, private URLs, or personal media. Report security issues privately through the Security tab.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Windows 10/11 x64, macOS Apple silicon, macOS Intel, Linux x64]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: Use a public test URL or redact the URL.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and redacted diagnostics
+    validations:
+      required: true
