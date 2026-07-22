@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimal desktop permissions for yt-dlp Desktop",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:allow-open"]
+}

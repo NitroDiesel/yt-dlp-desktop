@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "ytDlp": {
+    "version": "2026.07.04",
+    "license": "GPL-3.0-or-later (official PyInstaller/standalone combined work)",
+    "source": "https://github.com/yt-dlp/yt-dlp/releases/tag/2026.07.04",
+    "targets": {
+      "x86_64-pc-windows-msvc": {
+        "asset": "yt-dlp.exe",
+        "sha256": "52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8"
+      },
+      "x86_64-unknown-linux-gnu": {
+        "asset": "yt-dlp_linux",
+        "sha256": "6bbb3d314cde4febe36e5fa1d55462e29c974f63444e707871834f6d8cc210ae"
+      },
+      "aarch64-apple-darwin": {
+        "asset": "yt-dlp_macos",
+        "sha256": "498bd0dae17855c599d371d68ec5bafc439a9d8640e838be25c765a9792f261b"
+      },
+      "x86_64-apple-darwin": {
+        "asset": "yt-dlp_macos",
+        "sha256": "498bd0dae17855c599d371d68ec5bafc439a9d8640e838be25c765a9792f261b"
+      }
+    }
+  },
+  "deno": {
+    "version": "2.9.3",
+    "license": "MIT",
+    "source": "https://github.com/denoland/deno/releases/tag/v2.9.3",
+    "targets": {
+      "x86_64-pc-windows-msvc": {
+        "asset": "deno-x86_64-pc-windows-msvc.zip",
+        "sha256": "60343461ac5fe3a31f4ef12667f2946bb852e20655c8610aeb7e751e87f7df3a"
+      },
+      "x86_64-unknown-linux-gnu": {
+        "asset": "deno-x86_64-unknown-linux-gnu.zip",
+        "sha256": "8101865641cbede56f08ad19c0a67a87df84bce127fee0d3e3e1f7467717ffa6"
+      },
+      "aarch64-apple-darwin": {
+        "asset": "deno-aarch64-apple-darwin.zip",
+        "sha256": "1b2972f7ceb6df28d9600eab18d423bebb9aa18db02f01d7eb37a5b501482203"
+      },
+      "x86_64-apple-darwin": {
+        "asset": "deno-x86_64-apple-darwin.zip",
+        "sha256": "cff2bce236fde0952aac62a5699464c46901b4eb1e61d0caffbb33d556e098c1"
+      }
+    }
+  }
+}
