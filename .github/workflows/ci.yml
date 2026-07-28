@@ -26,6 +26,7 @@ jobs:
       - run: pnpm build
 
   native:
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +44,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Linux prerequisites
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - uses: pnpm/action-setup@v4
         with:
           version: 11.9.0
@@ -67,6 +72,13 @@ jobs:
       - name: Prepare Unix sidecars
         if: runner.os != 'Windows'
         run: ./scripts/prepare-sidecars.sh '${{ matrix.target }}'
+      - name: Verify Windows sidecars
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/verify-sidecars.ps1 -Target '${{ matrix.target }}'
+      - name: Verify Unix sidecars
+        if: runner.os != 'Windows'
+        run: bash ./scripts/verify-sidecars.sh '${{ matrix.target }}'
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --target '${{ matrix.target }}' --all-targets --all-features -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --target '${{ matrix.target }}' --all-targets --all-features

@@ -41,6 +41,48 @@ describe("DownloadView", () => {
       probe,
       isAnalyzing: false,
       analyzeError: undefined,
+      hardwareAcceleration: {
+        status: "available",
+        message: "NVIDIA NVENC is ready.",
+        encoders: [
+          {
+            provider: "nvenc",
+            codec: "h264",
+            encoder: "h264_nvenc",
+            compiled: true,
+            available: true,
+            decodeBackend: "cuda",
+            decodeAvailable: true,
+          },
+          {
+            provider: "nvenc",
+            codec: "hevc",
+            encoder: "hevc_nvenc",
+            compiled: true,
+            available: true,
+            decodeBackend: "cuda",
+            decodeAvailable: false,
+          },
+          {
+            provider: "nvenc",
+            codec: "av1",
+            encoder: "av1_nvenc",
+            compiled: true,
+            available: false,
+            decodeBackend: "cuda",
+            decodeAvailable: false,
+            message: "Unsupported GPU",
+          },
+          {
+            provider: "amf",
+            codec: "h264",
+            encoder: "h264_amf",
+            compiled: true,
+            available: false,
+            decodeAvailable: false,
+          },
+        ],
+      },
       enqueue: vi.fn(),
       setView: vi.fn(),
     });
@@ -86,5 +128,54 @@ describe("DownloadView", () => {
 
     await user.click(screen.getByRole("button", { name: "Download now" }));
     expect(enqueue).toHaveBeenCalledOnce();
+  });
+
+  it("offers detected GPU codecs as an automatic conversion step", async () => {
+    const user = userEvent.setup();
+    render(<DownloadView />);
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Convert video with automatic GPU acceleration",
+      }),
+    );
+
+    expect(screen.getByLabelText("Video codec")).toHaveValue("h264");
+    expect(
+      screen.getByRole("checkbox", { name: /Decode on the GPU too/ }),
+    ).toBeEnabled();
+    expect(screen.getByRole("option", { name: /AV1/ })).toBeDisabled();
+  });
+
+  it("recognizes an AMD AMF-only system without a vendor choice", async () => {
+    const user = userEvent.setup();
+    useAppStore.setState({
+      hardwareAcceleration: {
+        status: "available",
+        message: "AMD AMF is ready.",
+        encoders: [
+          {
+            provider: "amf",
+            codec: "h264",
+            encoder: "h264_amf",
+            compiled: true,
+            available: true,
+            decodeAvailable: false,
+          },
+        ],
+      },
+    });
+    render(<DownloadView />);
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Convert video with automatic GPU acceleration",
+      }),
+    );
+
+    expect(screen.getByRole("option", { name: /AMD AMF/ })).toBeEnabled();
+    expect(
+      screen.getByRole("checkbox", { name: /Decode on the GPU too/ }),
+    ).toBeDisabled();
   });
 });

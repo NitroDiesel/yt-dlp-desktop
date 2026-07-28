@@ -40,6 +40,9 @@ const MANAGED_FLAGS: &[&str] = &[
     "--limit-rate",
     "--js-runtimes",
     "--no-js-runtimes",
+    "--recode-video",
+    "--postprocessor-args",
+    "--ppa",
 ];
 
 pub fn validate_request(request: &DownloadRequest) -> AppResult<()> {
@@ -78,6 +81,15 @@ pub fn validate_request(request: &DownloadRequest) -> AppResult<()> {
     }
     if request.options.custom_arguments.len() > 64 {
         return Err(AppError::Validation("Too many expert arguments".into()));
+    }
+    if let Some(conversion) = request.options.video_conversion.as_ref() {
+        let maximum = 51;
+        if !(1..=maximum).contains(&conversion.quality) {
+            return Err(AppError::Validation(format!(
+                "{} GPU quality must be between 1 and {maximum}",
+                conversion.codec.label()
+            )));
+        }
     }
     for argument in &request.options.custom_arguments {
         if argument.contains('\0')
@@ -229,6 +241,7 @@ mod tests {
                 "/tmp".into()
             },
             filename_template: "%(title)s.%(ext)s".into(),
+            is_playlist: false,
             options: crate::domain::DownloadOptions {
                 mode: MediaMode::Video,
                 quality: "1080".into(),
@@ -242,6 +255,7 @@ mod tests {
                 playlist_items: None,
                 custom_format: None,
                 custom_arguments: vec![],
+                video_conversion: None,
             },
         }
     }
@@ -265,5 +279,25 @@ mod tests {
         let mut value = request();
         value.url = "file:///secret".into();
         assert!(build_download_args(&value, &AppSettings::default()).is_err());
+    }
+
+    #[test]
+    fn rejects_out_of_range_gpu_quality() {
+        let mut value = request();
+        value.options.video_conversion = Some(crate::domain::VideoConversionOptions {
+            codec: crate::domain::HardwareCodec::H264,
+            quality: 52,
+            use_hardware_decode: false,
+        });
+        assert!(build_download_args(&value, &AppSettings::default()).is_err());
+    }
+
+    #[test]
+    fn reserves_postprocessor_flags_for_typed_features() {
+        for flag in ["--recode-video", "--postprocessor-args", "--ppa"] {
+            let mut value = request();
+            value.options.custom_arguments = vec![flag.into()];
+            assert!(build_download_args(&value, &AppSettings::default()).is_err());
+        }
     }
 }

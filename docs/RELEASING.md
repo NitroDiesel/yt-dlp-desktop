@@ -4,7 +4,7 @@
 
 Stable releases are built only from a signed `vMAJOR.MINOR.PATCH` tag after the native CI and package-smoke workflows pass. The tag, `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` must contain the same version. Do not publish a package built from a dirty tree.
 
-Official packages include the exact yt-dlp and Deno builds in `packaging/components.json`. Updating either component requires reviewing its release notes and license notices, independently calculating every asset hash, running the fake-process integration suite, and completing installation/download/cancellation smoke tests on each platform.
+Official packages include the exact yt-dlp, Deno, FFmpeg, and FFprobe builds in `packaging/components.json`. Updating any component requires reviewing its release notes and license notices, independently calculating every asset hash, preserving a durable corresponding-source path, running the fake-process integration suite, and completing installation/download/cancellation smoke tests on each platform.
 
 ## Local verification
 
@@ -26,12 +26,12 @@ Use `./scripts/prepare-sidecars.sh <rust-target>` on macOS/Linux and replace the
 
 | Platform | Rust/sidecar target | Packages |
 |---|---|---|
-| Windows 10/11 x64 | `x86_64-pc-windows-msvc` | NSIS `.exe` |
-| macOS Intel | `x86_64-apple-darwin` | `.dmg` |
-| macOS Apple silicon | `aarch64-apple-darwin` | `.dmg` |
-| Linux x64 | `x86_64-unknown-linux-gnu` | `.deb`, AppImage |
+| Windows 10 22H2/11 x64 | `x86_64-pc-windows-msvc` | NSIS `.exe` |
+| macOS 12+ Intel | `x86_64-apple-darwin` | `.dmg` |
+| macOS 12+ Apple silicon | `aarch64-apple-darwin` | `.dmg` |
+| Linux x64, glibc 2.28+ | `x86_64-unknown-linux-gnu` | `.deb`, AppImage |
 
-The `Package smoke` workflow creates unsigned internal artifacts on demand and on `main`. The `Release` workflow is tag-only, protected by the `release` GitHub environment, and creates a draft GitHub release. A maintainer verifies signatures, installs the actual uploaded packages on clean machines, then publishes the draft.
+The `Package smoke` workflow creates unsigned internal artifacts on demand and on `main`. The `Release` workflow is tag-only and protected by the `release` GitHub environment. After every platform package and the FFmpeg source-materials archive succeed, it publishes the GitHub release with generated notes, checksums, and installers. Treat approval of the protected environment as the final publication gate.
 
 ## Signing credentials
 
@@ -48,15 +48,16 @@ Version 0.1 intentionally does not advertise an automatic updater until the publ
 Run on a clean non-developer account for every package:
 
 1. Install without administrator elevation where the package supports it.
-2. Launch from the normal application menu—not a terminal—and confirm yt-dlp and Deno show as bundled/available.
+2. Launch from the normal application menu—not a terminal—and confirm yt-dlp, Deno, FFmpeg, and FFprobe show as bundled/available.
 3. Analyze and download one authorized single video with no system yt-dlp, Python, Deno, or FFmpeg installed.
 4. Confirm the file appears at the chosen destination and Open/Reveal cannot target an arbitrary path.
 5. Start a long authorized download, cancel it, and confirm no child process remains.
 6. Queue two jobs, quit during one, relaunch, and verify recovery/interrupted states.
 7. Probe a playlist, reject the full-playlist confirmation once, then download an explicit range.
-8. Confirm an FFmpeg-only option is rejected until FFmpeg is configured.
-9. Exercise light/dark/system themes, keyboard focus, reduced motion, and a narrow window.
-10. Inspect diagnostics for URLs, credentials, cookie contents, and home-directory leakage.
+8. On Windows/Linux with supported hardware, verify that only runtime-ready NVIDIA NVENC or AMD AMF codec options appear, run one automatic GPU conversion, and verify hardware decode independently when offered. On unsupported hardware, verify the reason and disabled controls; no GPU driver should be present in the package.
+9. Cancel a conversion and force one conversion failure; confirm the original media remains intact and no partial output remains.
+10. Exercise light/dark/system themes, keyboard focus, reduced motion, and a narrow window.
+11. Inspect diagnostics for URLs, credentials, cookie contents, and home-directory leakage.
 
 ## Rollback
 

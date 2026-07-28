@@ -223,6 +223,7 @@ mod tests {
                     "/tmp".into()
                 },
                 filename_template: "%(title)s.%(ext)s".into(),
+                is_playlist: false,
                 options: DownloadOptions {
                     mode: MediaMode::Video,
                     quality: "best".into(),
@@ -236,6 +237,7 @@ mod tests {
                     playlist_items: None,
                     custom_format: None,
                     custom_arguments: vec![],
+                    video_conversion: None,
                 },
             },
             title: Some("Test".into()),

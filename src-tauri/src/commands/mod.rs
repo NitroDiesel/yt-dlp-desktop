@@ -4,7 +4,10 @@ use tauri::State;
 
 use crate::{
     application::AppService,
-    domain::{AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadRequest, MediaProbe},
+    domain::{
+        AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadRequest,
+        HardwareAccelerationInfo, MediaProbe,
+    },
     error::{AppError, AppResult},
     platform,
 };
@@ -86,6 +89,12 @@ pub async fn refresh_dependencies(
     service: State<'_, Arc<AppService>>,
 ) -> AppResult<Vec<DependencyInfo>> {
     Ok(service.dependencies().await)
+}
+#[tauri::command]
+pub async fn refresh_hardware_acceleration(
+    service: State<'_, Arc<AppService>>,
+) -> AppResult<HardwareAccelerationInfo> {
+    Ok(service.hardware_acceleration().await)
 }
 #[tauri::command]
 pub async fn remove_history_entry(

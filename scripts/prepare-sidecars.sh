@@ -40,3 +40,43 @@ unzip -q "$temporary/$deno_asset" -d "$temporary/deno"
 test -f "$temporary/deno/deno"
 install -m 0755 "$temporary/$yt_asset" "$destination/yt-dlp-$target"
 install -m 0755 "$temporary/deno/deno" "$destination/deno-$target"
+
+node - "$manifest" "$target" <<'NODE' >"$temporary/ffmpeg-artifacts.tsv"
+const manifest = require(process.argv[2])
+const target = manifest.ffmpeg.targets[process.argv[3]]
+if (!target) process.exit(2)
+for (const artifact of target.artifacts) {
+  for (const [binary, entry] of Object.entries(artifact.entries)) {
+    console.log([artifact.asset, artifact.url, artifact.sha256, artifact.archive, binary, entry].join("\t"))
+  }
+}
+NODE
+
+artifact_index=0
+last_asset=""
+last_extract_path=""
+while IFS=$'\t' read -r asset url hash archive binary entry; do
+  artifact_path="$temporary/$asset"
+  if [[ "$asset" == "$last_asset" ]]; then
+    extract_path="$last_extract_path"
+  else
+    extract_path="$temporary/ffmpeg-$artifact_index"
+  fi
+  if [[ ! -f "$artifact_path" ]]; then
+    curl --fail --location --retry 3 "$url" --output "$artifact_path"
+    verify_sha256 "$hash" "$artifact_path"
+  fi
+  if [[ "$asset" != "$last_asset" ]]; then
+    mkdir -p "$extract_path"
+    case "$archive" in
+      zip) unzip -q "$artifact_path" -d "$extract_path" ;;
+      tar.xz) tar -xJf "$artifact_path" -C "$extract_path" ;;
+      *) echo "Unsupported FFmpeg archive type: $archive" >&2; exit 2 ;;
+    esac
+  fi
+  test -f "$extract_path/$entry"
+  install -m 0755 "$extract_path/$entry" "$destination/$binary-$target"
+  last_asset="$asset"
+  last_extract_path="$extract_path"
+  artifact_index=$((artifact_index + 1))
+done <"$temporary/ffmpeg-artifacts.tsv"

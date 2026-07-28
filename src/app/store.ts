@@ -7,6 +7,7 @@ import type {
   DownloadJob,
   DownloadRequest,
   MediaProbe,
+  HardwareAccelerationInfo,
 } from "../types/contracts";
 
 export type ViewName = "download" | "queue" | "history" | "settings";
@@ -17,6 +18,7 @@ interface AppState {
   fatalError?: string;
   settings?: AppSettings;
   dependencies: DependencyInfo[];
+  hardwareAcceleration?: HardwareAccelerationInfo;
   queue: DownloadJob[];
   history: DownloadJob[];
   queuePaused: boolean;
@@ -41,7 +43,7 @@ interface AppState {
   reorder: (jobId: string, direction: "up" | "down") => Promise<void>;
   setPaused: (paused: boolean) => Promise<void>;
   saveSettings: (settings: AppSettings) => Promise<void>;
-  refreshDependencies: () => Promise<void>;
+  refreshEngineStatus: () => Promise<void>;
   removeHistory: (jobId: string) => Promise<void>;
 }
 
@@ -140,8 +142,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const saved = await appApi.saveSettings(settings);
     set({ settings: saved });
   },
-  refreshDependencies: async () => {
-    set({ dependencies: await appApi.refreshDependencies() });
+  refreshEngineStatus: async () => {
+    const [dependencies, hardwareAcceleration] = await Promise.all([
+      appApi.refreshDependencies(),
+      appApi.refreshHardwareAcceleration(),
+    ]);
+    set({ dependencies, hardwareAcceleration });
   },
   removeHistory: async (jobId) => {
     await appApi.removeHistory(jobId);

@@ -30,7 +30,10 @@ export function JobCard({
   );
   const progress = Math.max(0, Math.min(100, job.progress.percent ?? 0));
   return (
-    <article className={`job-card job-card--${job.status}`}>
+    <article
+      className={`job-card job-card--${job.status}`}
+      aria-label={`${job.title || "Preparing download"}, ${job.status.replaceAll("_", " ")}`}
+    >
       <div className="job-card__rail" aria-hidden="true">
         <span style={{ height: `${progress}%` }} />
       </div>
@@ -38,7 +41,9 @@ export function JobCard({
         <header className="job-card__header">
           <div className="job-card__title">
             <p>{hostname(job.request.url)}</p>
-            <h3>{job.title || "Preparing download…"}</h3>
+            <h3 title={job.title || "Preparing download…"}>
+              {job.title || "Preparing download…"}
+            </h3>
           </div>
           <StatusPill status={job.status} />
         </header>

@@ -1,4 +1,6 @@
 export type MediaMode = "video" | "audio" | "custom";
+export type HardwareCodec = "h264" | "hevc" | "av1";
+export type HardwareEncoderProvider = "nvenc" | "amf";
 export type JobStatus =
   | "queued"
   | "analyzing"
@@ -58,12 +60,18 @@ export interface DownloadOptions {
   playlistItems?: string;
   customFormat?: string;
   customArguments: string[];
+  videoConversion?: {
+    codec: HardwareCodec;
+    quality: number;
+    useHardwareDecode: boolean;
+  };
 }
 
 export interface DownloadRequest {
   url: string;
   destination: string;
   filenameTemplate: string;
+  isPlaylist: boolean;
   options: DownloadOptions;
 }
 
@@ -122,10 +130,33 @@ export interface DependencyInfo {
   message?: string;
 }
 
+export interface HardwareEncoderInfo {
+  provider: HardwareEncoderProvider;
+  codec: HardwareCodec;
+  encoder: string;
+  compiled: boolean;
+  available: boolean;
+  decodeBackend?: string;
+  decodeAvailable: boolean;
+  message?: string;
+}
+
+export interface HardwareAccelerationInfo {
+  status:
+    | "available"
+    | "unsupported_platform"
+    | "build_missing"
+    | "driver_or_gpu_missing"
+    | "probe_failed";
+  encoders: HardwareEncoderInfo[];
+  message: string;
+}
+
 export interface AppSnapshot {
   settings: AppSettings;
   queue: DownloadJob[];
   history: DownloadJob[];
   dependencies: DependencyInfo[];
+  hardwareAcceleration: HardwareAccelerationInfo;
   queuePaused: boolean;
 }

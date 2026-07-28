@@ -26,8 +26,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to workspace
+      </a>
       <aside className="sidebar">
-        <div className="brand" aria-label="yt-dlp Desktop">
+        <div className="brand" aria-label="yt-dlp Desktop" title="yt-dlp Desktop">
           <span className="brand-mark" aria-hidden="true">
             <span />
           </span>
@@ -46,6 +49,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={view}
                 className={`nav-item ${activeView === view ? "nav-item--active" : ""}`}
                 aria-current={activeView === view ? "page" : undefined}
+                aria-label={label}
+                title={label}
                 onClick={() => setView(view)}
               >
                 <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
@@ -60,9 +65,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <button className="engine-status" onClick={() => setView("settings")}>
+        <button
+          className="engine-status"
+          aria-label={
+            ytDlpReady
+              ? "Download engine ready. Open settings"
+              : "Download engine setup needed. Open settings"
+          }
+          title={ytDlpReady ? "Engine ready" : "Setup needed"}
+          onClick={() => setView("settings")}
+        >
           <span
             className={`status-dot ${ytDlpReady ? "status-dot--ready" : "status-dot--warning"}`}
+            aria-hidden="true"
           />
           <span>
             <strong>{ytDlpReady ? "Engine ready" : "Setup needed"}</strong>
@@ -71,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </button>
       </aside>
 
-      <main className="workspace" id="main-content">
+      <main className="workspace" id="main-content" tabIndex={-1}>
         {children}
       </main>
     </div>

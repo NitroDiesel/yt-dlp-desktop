@@ -23,7 +23,8 @@ function Get-VerifiedFile {
 try {
   $ytTarget = $manifest.ytDlp.targets.$Target
   $denoTarget = $manifest.deno.targets.$Target
-  if (-not $ytTarget -or -not $denoTarget) { throw "Unsupported sidecar target: $Target" }
+  $ffmpegTarget = $manifest.ffmpeg.targets.$Target
+  if (-not $ytTarget -or -not $denoTarget -or -not $ffmpegTarget) { throw "Unsupported sidecar target: $Target" }
 
   $ytDownload = Join-Path $temporaryDirectory $ytTarget.asset
   Get-VerifiedFile -Uri "https://github.com/yt-dlp/yt-dlp/releases/download/$($manifest.ytDlp.version)/$($ytTarget.asset)" -Destination $ytDownload -ExpectedHash $ytTarget.sha256
@@ -39,6 +40,24 @@ try {
   $denoExtension = if ($Target -match "windows") { ".exe" } else { "" }
   Copy-Item -LiteralPath $ytDownload -Destination (Join-Path $targetDirectory "yt-dlp-$Target$ytExtension") -Force
   Copy-Item -LiteralPath $denoSource -Destination (Join-Path $targetDirectory "deno-$Target$denoExtension") -Force
+
+  foreach ($artifact in $ffmpegTarget.artifacts) {
+    if ($artifact.archive -ne "zip") {
+      throw "PowerShell sidecar preparation does not support FFmpeg archive type '$($artifact.archive)'."
+    }
+    $archivePath = Join-Path $temporaryDirectory $artifact.asset
+    Get-VerifiedFile -Uri $artifact.url -Destination $archivePath -ExpectedHash $artifact.sha256
+    $extractPath = Join-Path $temporaryDirectory ("ffmpeg-" + [guid]::NewGuid())
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $extractPath)
+    foreach ($entry in $artifact.entries.PSObject.Properties) {
+      $sourcePath = Join-Path $extractPath ($entry.Value -replace "/", "\")
+      if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
+        throw "FFmpeg archive '$($artifact.asset)' did not contain '$($entry.Value)'."
+      }
+      $extension = if ($Target -match "windows") { ".exe" } else { "" }
+      Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $targetDirectory "$($entry.Name)-$Target$extension") -Force
+    }
+  }
 } finally {
   if (Test-Path -LiteralPath $temporaryDirectory) { Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force }
 }

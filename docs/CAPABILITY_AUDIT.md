@@ -4,10 +4,10 @@ Audited against the local upstream source tree at `D:\Coding2.0\yt-dlp-master`, 
 
 ## Release classification
 
-- **Essential and implemented:** single media, playlists/channels, structured analysis, practical quality selection, best video/audio merging when FFmpeg exists, source/converted audio, subtitles and automatic captions, metadata/thumbnail embedding, output paths/templates, retries, rate limit, proxy, cookies, progress, cancellation, diagnostics, queue, history, and recovery.
-- **Advanced and implemented:** exact format selection, playlist item expressions, browser/cookie-file access, custom executable paths, bounded concurrency, and separately tokenized non-conflicting expert arguments.
+- **Essential and implemented:** single media, playlists/channels, structured analysis, practical quality selection, best video/audio merging, source/converted audio, subtitles and automatic captions, metadata/thumbnail embedding, output paths/templates, retries, rate limit, proxy, cookies, progress, cancellation, diagnostics, queue, history, and recovery.
+- **Advanced and implemented:** exact format selection, playlist item expressions, browser/cookie-file access, custom executable paths, bounded concurrency, separately tokenized non-conflicting expert arguments, and runtime-detected NVENC/AMF video conversion.
 - **Expert-only upstream capabilities:** extractor-specific authentication, custom downloader/postprocessor behavior, and unrestricted configuration. These are intentionally not first-class UI controls.
-- **Deferred:** chapters/SponsorBlock controls, download archive, managed FFmpeg, per-component in-app updating/rollback, and signed automatic app updates. These need additional policy, provenance, or destructive-behavior design before they are safe defaults.
+- **Deferred:** chapters/SponsorBlock controls, download archive, per-component in-app updating/rollback, and signed automatic app updates. These need additional policy, provenance, or destructive-behavior design before they are safe defaults.
 
 ## UI-to-CLI mapping
 
@@ -15,9 +15,7 @@ Audited against the local upstream source tree at `D:\Coding2.0\yt-dlp-master`, 
 |---|---|---|
 | Analyze | `--dump-single-json --skip-download --no-warnings` | Normalized in Rust; probe cancellation is explicit. |
 | Best available, with FFmpeg | `-f bv*+ba/b` | Lets yt-dlp merge the best compatible streams. |
-| Best available, without FFmpeg | `-f b` | Safe fresh-install default; no merge dependency. |
 | Up to Np, with FFmpeg | `-f bv*[height<=N]+ba/b[height<=N]/b` | Falls back instead of failing on an exact missing height. |
-| Up to Np, without FFmpeg | `-f b[height<=N]/b` | Selects one compatible file. |
 | Best single file | `-f b` | Explicit no-merge mode. |
 | Exact format | `-f <selector>` | Advanced selector is validated as one value. |
 | Source audio | `-f ba/b` | No conversion. |
@@ -37,6 +35,8 @@ Audited against the local upstream source tree at `D:\Coding2.0\yt-dlp-master`, 
 | Retries | `--retries <n> --fragment-retries <n>` | App-level retry creates a clean new attempt. |
 | Progress | `--newline --progress-template ...` | Parsed from an app-owned sentinel prefix. |
 | Final output | `--print after_move:...` | Used to persist the completed file path. |
+| Automatic GPU conversion | direct `ffmpeg` argv using the first working NVENC or AMF encoder for the requested codec | Default off. The provider is never persisted or manually selected. Writes a new MKV; source is removed only after success. |
+| GPU decode | provider-specific hardware decode arguments | Advanced opt-in shown only after a real runtime decode probe; software decode remains the compatibility fallback. |
 
 ## Deliberately not exposed in 0.1
 

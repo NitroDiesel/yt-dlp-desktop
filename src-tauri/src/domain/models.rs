@@ -51,6 +51,60 @@ pub enum MediaMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum HardwareCodec {
+    H264,
+    Hevc,
+    Av1,
+}
+
+impl HardwareCodec {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::H264 => "H.264",
+            Self::Hevc => "HEVC",
+            Self::Av1 => "AV1",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum HardwareEncoderProvider {
+    Nvenc,
+    Amf,
+}
+
+impl HardwareEncoderProvider {
+    pub fn encoder_name(&self, codec: &HardwareCodec) -> &'static str {
+        match (self, codec) {
+            (Self::Nvenc, HardwareCodec::H264) => "h264_nvenc",
+            (Self::Nvenc, HardwareCodec::Hevc) => "hevc_nvenc",
+            (Self::Nvenc, HardwareCodec::Av1) => "av1_nvenc",
+            (Self::Amf, HardwareCodec::H264) => "h264_amf",
+            (Self::Amf, HardwareCodec::Hevc) => "hevc_amf",
+            (Self::Amf, HardwareCodec::Av1) => "av1_amf",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Nvenc => "NVIDIA NVENC",
+            Self::Amf => "AMD AMF",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoConversionOptions {
+    pub codec: HardwareCodec,
+    pub quality: u8,
+    #[serde(default, alias = "useCudaDecode")]
+    pub use_hardware_decode: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadOptions {
     pub mode: MediaMode,
@@ -65,6 +119,8 @@ pub struct DownloadOptions {
     pub playlist_items: Option<String>,
     pub custom_format: Option<String>,
     pub custom_arguments: Vec<String>,
+    #[serde(default)]
+    pub video_conversion: Option<VideoConversionOptions>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -73,6 +129,8 @@ pub struct DownloadRequest {
     pub url: String,
     pub destination: String,
     pub filename_template: String,
+    #[serde(default)]
+    pub is_playlist: bool,
     pub options: DownloadOptions,
 }
 
@@ -204,6 +262,59 @@ pub struct DependencyInfo {
     pub message: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HardwareEncoderInfo {
+    pub provider: HardwareEncoderProvider,
+    pub codec: HardwareCodec,
+    pub encoder: String,
+    pub compiled: bool,
+    pub available: bool,
+    pub decode_backend: Option<String>,
+    pub decode_available: bool,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HardwareAccelerationInfo {
+    pub status: String,
+    pub encoders: Vec<HardwareEncoderInfo>,
+    pub message: String,
+}
+
+impl HardwareAccelerationInfo {
+    pub fn unavailable(status: &str, message: impl Into<String>) -> Self {
+        Self {
+            status: status.into(),
+            encoders: [HardwareEncoderProvider::Nvenc, HardwareEncoderProvider::Amf]
+                .into_iter()
+                .flat_map(|provider| {
+                    [HardwareCodec::H264, HardwareCodec::Hevc, HardwareCodec::Av1]
+                        .into_iter()
+                        .map(move |codec| HardwareEncoderInfo {
+                            encoder: provider.encoder_name(&codec).into(),
+                            provider: provider.clone(),
+                            codec,
+                            compiled: false,
+                            available: false,
+                            decode_backend: None,
+                            decode_available: false,
+                            message: None,
+                        })
+                })
+                .collect(),
+            message: message.into(),
+        }
+    }
+
+    pub fn encoder_for(&self, codec: &HardwareCodec) -> Option<&HardwareEncoderInfo> {
+        self.encoders
+            .iter()
+            .find(|encoder| &encoder.codec == codec && encoder.available)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSnapshot {
@@ -211,5 +322,57 @@ pub struct AppSnapshot {
     pub queue: Vec<DownloadJob>,
     pub history: Vec<DownloadJob>,
     pub dependencies: Vec<DependencyInfo>,
+    pub hardware_acceleration: HardwareAccelerationInfo,
     pub queue_paused: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_download_options_default_gpu_conversion_to_off() {
+        let value = serde_json::json!({
+            "mode": "video",
+            "quality": "best",
+            "audioFormat": "best",
+            "subtitleLanguages": [],
+            "writeSubtitles": false,
+            "writeAutomaticSubtitles": false,
+            "embedSubtitles": false,
+            "embedMetadata": true,
+            "embedThumbnail": false,
+            "playlistItems": null,
+            "customFormat": null,
+            "customArguments": []
+        });
+        let options: DownloadOptions = serde_json::from_value(value).unwrap();
+        assert!(options.video_conversion.is_none());
+    }
+
+    #[test]
+    fn old_download_requests_default_playlist_flag_to_false() {
+        let value = serde_json::json!({
+            "url": "https://example.com/watch?v=test",
+            "destination": "downloads",
+            "filenameTemplate": "%(title)s.%(ext)s",
+            "options": {
+                "mode": "video",
+                "quality": "best",
+                "audioFormat": "best",
+                "subtitleLanguages": [],
+                "writeSubtitles": false,
+                "writeAutomaticSubtitles": false,
+                "embedSubtitles": false,
+                "embedMetadata": true,
+                "embedThumbnail": false,
+                "playlistItems": null,
+                "customFormat": null,
+                "customArguments": []
+            }
+        });
+        let request: DownloadRequest = serde_json::from_value(value).unwrap();
+        assert!(!request.is_playlist);
+        assert!(request.options.video_conversion.is_none());
+    }
 }

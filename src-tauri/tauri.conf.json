@@ -29,12 +29,19 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/yt-dlp", "binaries/deno"],
-    "resources": [
-      "resources/THIRD_PARTY_NOTICES.txt",
-      "resources/DENO_LICENSE.md",
-      "resources/YT_DLP_THIRD_PARTY_LICENSES.txt"
+    "externalBin": [
+      "binaries/yt-dlp",
+      "binaries/deno",
+      "binaries/ffmpeg",
+      "binaries/ffprobe"
     ],
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "resources/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt",
+      "resources/DENO_LICENSE.md": "DENO_LICENSE.md",
+      "resources/YT_DLP_THIRD_PARTY_LICENSES.txt": "YT_DLP_THIRD_PARTY_LICENSES.txt",
+      "resources/FFMPEG_NOTICE.md": "FFMPEG_NOTICE.md"
+    },
     "copyright": "Copyright (c) 2026 yt-dlp Desktop contributors",
     "category": "Utility",
     "shortDescription": "Download media with yt-dlp",
@@ -54,7 +61,7 @@
       }
     },
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "12.0"
     }
   }
 }

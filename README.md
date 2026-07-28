@@ -2,7 +2,7 @@
 
 A focused desktop interface for [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Tauri 2, Rust, React, and SQLite.
 
-The installer includes pinned, checksum-verified builds of **yt-dlp** and **Deno**. People who install the app do not need Python, yt-dlp, Deno, Node.js, or a terminal. FFmpeg is optional: downloads work immediately using the best compatible single file, while FFmpeg unlocks stream merging, audio conversion, and subtitle embedding.
+The installer includes pinned, checksum-verified builds of **yt-dlp, FFmpeg, FFprobe, and Deno**. People who install the app do not need Python, Node.js, a terminal, or any separate media tools.
 
 > Download only media you are authorized to access. This project does not bypass DRM and is not affiliated with yt-dlp or supported media services.
 
@@ -15,12 +15,13 @@ The installer includes pinned, checksum-verified builds of **yt-dlp** and **Deno
 - Restores queued work after a restart and marks unexpectedly stopped work as interrupted.
 - Runs yt-dlp as a direct child process with typed arguments, bounded diagnostics, and process-tree cancellation.
 - Detects bundled, managed, custom, and system tools without depending on the launch directory.
+- Detects usable NVIDIA NVENC or AMD AMF encoders at runtime and can optionally re-encode a completed video on the GPU.
 
 ## Install
 
-Download the package for your platform from GitHub Releases and install it normally. The first launch is ready for standard downloads. To enable merging and conversion, choose an existing FFmpeg executable in **Settings → Download engine**.
+Download the package for your platform from GitHub Releases and install it normally. The first launch is ready for analyzing, downloading, merging, audio conversion, and subtitle post-processing. Custom executable overrides in **Settings → Download engine** are optional expert controls.
 
-The initial release targets Windows 10/11 x64, macOS 10.15+ (Intel and Apple silicon), and common x64 Linux distributions. Packages should be signed before a public stable release; see [Releasing](docs/RELEASING.md).
+The initial release targets Windows 10 22H2/11 x64, macOS 12+ (Intel and Apple silicon), and x64 Linux distributions with glibc 2.28/kernel 4.18 or newer. GPU conversion appears only when the bundled FFmpeg engine completes a real runtime encode through an installed NVIDIA or AMD driver; no vendor driver/runtime is bundled or required for normal downloads. NVENC and AMF conversion are unavailable on macOS in this release. Packages should be signed before a public stable release; see [Releasing](docs/RELEASING.md).
 
 ## Develop
 
@@ -61,4 +62,4 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features
 
 Copyright © 2026 yt-dlp Desktop contributors.
 
-Licensed under the GNU General Public License, version 3 or later. This license keeps redistribution compatible with the bundled official yt-dlp standalone executable, which is GPLv3+ software. See [LICENSE](LICENSE).
+Licensed under the GNU General Public License, version 3 or later. This keeps redistribution compatible with the bundled official yt-dlp standalone executable and GPL FFmpeg builds. See [LICENSE](LICENSE) and the packaged [FFmpeg notice](src-tauri/resources/FFMPEG_NOTICE.md).

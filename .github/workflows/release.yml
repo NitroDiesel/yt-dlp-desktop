@@ -1,4 +1,4 @@
-name: Release candidate
+name: Release
 
 on:
   push:
@@ -8,6 +8,45 @@ permissions:
   contents: read
 
 jobs:
+  ffmpeg-source-materials:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect exact FFmpeg source and build materials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source-materials
+          curl --fail --location --retry 3 \
+            https://github.com/BtbN/FFmpeg-Builds/archive/refs/tags/autobuild-2026-06-30-13-34.tar.gz \
+            --output source-materials/FFmpeg-Builds-autobuild-2026-06-30-13-34.tar.gz
+          curl --fail --location --retry 3 \
+            https://github.com/FFmpeg/FFmpeg/archive/ce3c09c101c83add623774d414a9f9498caf5c25.tar.gz \
+            --output source-materials/FFmpeg-ce3c09c101c83add623774d414a9f9498caf5c25.tar.gz
+          curl --fail --location --retry 3 \
+            https://github.com/FFmpeg/nv-codec-headers/archive/33a9ede8d9914299d9262539c576a15bd0a19621.tar.gz \
+            --output source-materials/nv-codec-headers-33a9ede8d9914299d9262539c576a15bd0a19621.tar.gz
+          curl --fail --location --retry 3 \
+            https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n8.1.2.tar.gz \
+            --output source-materials/FFmpeg-n8.1.2.tar.gz
+          curl --fail --location --retry 3 \
+            https://git.martin-riedl.de/ffmpeg/build-script/archive/bb1d6db29cee948f9685bcd69e6caf17d960662b.tar.gz \
+            --output source-materials/martin-riedl-build-script-bb1d6db29cee948f9685bcd69e6caf17d960662b.tar.gz
+          cp src-tauri/resources/FFMPEG_NOTICE.md source-materials/
+          cp packaging/components.json source-materials/
+          (
+            cd source-materials
+            sha256sum -- * > SHA256SUMS
+          )
+          tar --create --zstd --file yt-dlp-desktop-ffmpeg-source-materials.tar.zst source-materials
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-source-materials
+          path: yt-dlp-desktop-ffmpeg-source-materials.tar.zst
+          if-no-files-found: error
+
   package:
     environment: release
     strategy:
@@ -54,6 +93,13 @@ jobs:
       - name: Prepare Unix sidecars
         if: runner.os != 'Windows'
         run: ./scripts/prepare-sidecars.sh '${{ matrix.target }}'
+      - name: Verify Windows sidecars
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/verify-sidecars.ps1 -Target '${{ matrix.target }}'
+      - name: Verify Unix sidecars
+        if: runner.os != 'Windows'
+        run: bash ./scripts/verify-sidecars.sh '${{ matrix.target }}'
       - run: pnpm tauri build --target '${{ matrix.target }}' --bundles '${{ matrix.bundles }}'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -77,8 +123,8 @@ jobs:
             SHA256SUMS-${{ matrix.target }}.txt
           if-no-files-found: error
 
-  draft-release:
-    needs: package
+  publish-release:
+    needs: [package, ffmpeg-source-materials]
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -86,12 +132,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: release-*
           path: artifacts
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: false
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
@@ -100,3 +145,4 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.AppImage
             artifacts/SHA256SUMS-*.txt
+            artifacts/yt-dlp-desktop-ffmpeg-source-materials.tar.zst
