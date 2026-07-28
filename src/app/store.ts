@@ -7,7 +7,7 @@ import type {
   DownloadJob,
   DownloadRequest,
   MediaProbe,
-  NvidiaAccelerationInfo,
+  HardwareAccelerationInfo,
 } from "../types/contracts";
 
 export type ViewName = "download" | "queue" | "history" | "settings";
@@ -18,7 +18,7 @@ interface AppState {
   fatalError?: string;
   settings?: AppSettings;
   dependencies: DependencyInfo[];
-  nvidiaAcceleration?: NvidiaAccelerationInfo;
+  hardwareAcceleration?: HardwareAccelerationInfo;
   queue: DownloadJob[];
   history: DownloadJob[];
   queuePaused: boolean;
@@ -143,11 +143,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ settings: saved });
   },
   refreshEngineStatus: async () => {
-    const [dependencies, nvidiaAcceleration] = await Promise.all([
+    const [dependencies, hardwareAcceleration] = await Promise.all([
       appApi.refreshDependencies(),
-      appApi.refreshNvidiaAcceleration(),
+      appApi.refreshHardwareAcceleration(),
     ]);
-    set({ dependencies, nvidiaAcceleration });
+    set({ dependencies, hardwareAcceleration });
   },
   removeHistory: async (jobId) => {
     await appApi.removeHistory(jobId);

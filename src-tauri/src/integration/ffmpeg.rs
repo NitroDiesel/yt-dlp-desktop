@@ -5,6 +5,8 @@ use std::{
 };
 
 #[cfg(not(target_os = "macos"))]
+use futures::future::join_all;
+#[cfg(not(target_os = "macos"))]
 use std::process::Output;
 #[cfg(not(target_os = "macos"))]
 use tokio::time::timeout;
@@ -18,33 +20,33 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    domain::{DownloadProgress, NvidiaAccelerationInfo, VideoConversionOptions},
+    domain::{DownloadProgress, HardwareAccelerationInfo, VideoConversionOptions},
     error::{AppError, AppResult},
     integration::yt_dlp::RunnerEvent,
 };
 
 #[cfg(not(target_os = "macos"))]
-use crate::domain::{NvencCodec, NvencEncoderInfo};
+use crate::domain::{HardwareCodec, HardwareEncoderInfo, HardwareEncoderProvider};
 
 #[cfg(not(target_os = "macos"))]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
 
-pub async fn inspect_nvidia_acceleration(ffmpeg: Option<&Path>) -> NvidiaAccelerationInfo {
+pub async fn inspect_hardware_acceleration(ffmpeg: Option<&Path>) -> HardwareAccelerationInfo {
     #[cfg(target_os = "macos")]
     {
         let _ = ffmpeg;
-        NvidiaAccelerationInfo::unavailable(
+        HardwareAccelerationInfo::unavailable(
             "unsupported_platform",
-            "NVENC and NVDEC require an NVIDIA GPU and are supported on Windows and Linux. The bundled macOS engine uses Apple VideoToolbox instead.",
+            "Automatic NVENC and AMF acceleration is supported on Windows and Linux. The bundled macOS engine uses software conversion in this release.",
         )
     }
 
     #[cfg(not(target_os = "macos"))]
     {
         let Some(ffmpeg) = ffmpeg else {
-            return NvidiaAccelerationInfo::unavailable(
+            return HardwareAccelerationInfo::unavailable(
                 "build_missing",
-                "FFmpeg is unavailable, so NVIDIA acceleration cannot be checked.",
+                "FFmpeg is unavailable, so GPU acceleration cannot be checked.",
             );
         };
         let encoders_output = match run_probe(ffmpeg, &["-hide_banner", "-encoders"]).await {
@@ -53,7 +55,7 @@ pub async fn inspect_nvidia_acceleration(ffmpeg: Option<&Path>) -> NvidiaAcceler
                     + &String::from_utf8_lossy(&value.stderr)
             }
             Err(message) => {
-                return NvidiaAccelerationInfo::unavailable("probe_failed", message);
+                return HardwareAccelerationInfo::unavailable("probe_failed", message);
             }
         };
         let hwaccels_output = match run_probe(ffmpeg, &["-hide_banner", "-hwaccels"]).await {
@@ -62,19 +64,28 @@ pub async fn inspect_nvidia_acceleration(ffmpeg: Option<&Path>) -> NvidiaAcceler
                     + &String::from_utf8_lossy(&value.stderr)
             }
             Err(message) => {
-                return NvidiaAccelerationInfo::unavailable("probe_failed", message);
+                return HardwareAccelerationInfo::unavailable("probe_failed", message);
             }
         };
         let cuda_decode_compiled = hwaccels_output
             .lines()
             .any(|line| line.trim().eq_ignore_ascii_case("cuda"));
-        let mut encoders = Vec::new();
-        let mut h264_probe_file = None;
-        for codec in [NvencCodec::H264, NvencCodec::Hevc, NvencCodec::Av1] {
-            let encoder = codec.encoder_name();
-            let compiled = encoder_line_present(&encoders_output, encoder);
+        let d3d11_decode_compiled = cfg!(windows)
+            && hwaccels_output
+                .lines()
+                .any(|line| line.trim().eq_ignore_ascii_case("d3d11va"));
+        let candidates = [HardwareEncoderProvider::Nvenc, HardwareEncoderProvider::Amf]
+            .into_iter()
+            .flat_map(|provider| {
+                [HardwareCodec::H264, HardwareCodec::Hevc, HardwareCodec::Av1]
+                    .into_iter()
+                    .map(move |codec| (provider.clone(), codec))
+            });
+        let probes = join_all(candidates.map(|(provider, codec)| async {
+            let encoder = provider.encoder_name(&codec).to_string();
+            let compiled = encoder_line_present(&encoders_output, &encoder);
             let (available, message, probe_file) = if compiled {
-                runtime_encoder_probe(ffmpeg, &codec).await
+                runtime_encoder_probe(ffmpeg, &provider, &codec).await
             } else {
                 (
                     false,
@@ -82,28 +93,63 @@ pub async fn inspect_nvidia_acceleration(ffmpeg: Option<&Path>) -> NvidiaAcceler
                     None,
                 )
             };
-            if codec == NvencCodec::H264 {
-                h264_probe_file = probe_file;
-            }
-            encoders.push(NvencEncoderInfo {
-                codec,
-                encoder: encoder.into(),
-                compiled,
-                available,
-                message,
-            });
-        }
-        let cuda_decode_available =
-            if cuda_decode_compiled && encoders[0].available && h264_probe_file.is_some() {
-                runtime_decoder_probe(ffmpeg, h264_probe_file.as_deref().unwrap()).await
+            (
+                provider, codec, encoder, compiled, available, message, probe_file,
+            )
+        }))
+        .await;
+        let mut encoders = Vec::new();
+        for (provider, codec, encoder, compiled, available, message, probe_file) in probes {
+            let decode_backend = match provider {
+                HardwareEncoderProvider::Nvenc if cuda_decode_compiled => Some("cuda"),
+                HardwareEncoderProvider::Amf if d3d11_decode_compiled => Some("d3d11va"),
+                _ => None,
+            };
+            let decode_available = if available && codec == HardwareCodec::H264 {
+                match (decode_backend, probe_file.as_deref()) {
+                    (Some(backend), Some(path)) => {
+                        runtime_decoder_probe(ffmpeg, path, backend).await
+                    }
+                    _ => false,
+                }
             } else {
                 false
             };
-        if let Some(path) = h264_probe_file {
-            let _ = tokio::fs::remove_file(path).await;
+            if let Some(path) = probe_file {
+                let _ = tokio::fs::remove_file(path).await;
+            }
+            encoders.push(HardwareEncoderInfo {
+                provider: provider.clone(),
+                codec,
+                encoder,
+                compiled,
+                available,
+                decode_backend: decode_backend.map(str::to_string),
+                decode_available,
+                message,
+            });
+        }
+        for provider in [HardwareEncoderProvider::Nvenc, HardwareEncoderProvider::Amf] {
+            let provider_decode_available = encoders.iter().any(|encoder| {
+                encoder.provider == provider
+                    && encoder.codec == HardwareCodec::H264
+                    && encoder.decode_available
+            });
+            for encoder in encoders
+                .iter_mut()
+                .filter(|encoder| encoder.provider == provider && encoder.available)
+            {
+                encoder.decode_available = provider_decode_available;
+            }
         }
         let any_available = encoders.iter().any(|encoder| encoder.available);
-        NvidiaAccelerationInfo {
+        let nvenc_ready = encoders
+            .iter()
+            .any(|encoder| encoder.provider == HardwareEncoderProvider::Nvenc && encoder.available);
+        let amf_ready = encoders
+            .iter()
+            .any(|encoder| encoder.provider == HardwareEncoderProvider::Amf && encoder.available);
+        HardwareAccelerationInfo {
             status: if any_available {
                 "available"
             } else if encoders.iter().any(|encoder| encoder.compiled) {
@@ -112,17 +158,15 @@ pub async fn inspect_nvidia_acceleration(ffmpeg: Option<&Path>) -> NvidiaAcceler
                 "build_missing"
             }
             .into(),
-            cuda_decode_compiled,
-            cuda_decode_available,
             encoders,
-            message: if any_available {
-                if cuda_decode_available {
-                    "NVIDIA hardware encoding and CUDA decoding are ready for video conversion."
-                } else {
-                    "NVIDIA hardware encoding is ready. CUDA decoding is unavailable; software decoding will be used."
-                }
+            message: if nvenc_ready && amf_ready {
+                "NVIDIA NVENC and AMD AMF are ready. The app selects the available encoder automatically."
+            } else if nvenc_ready {
+                "NVIDIA NVENC is ready and will be selected automatically."
+            } else if amf_ready {
+                "AMD AMF is ready and will be selected automatically."
             } else {
-                "The bundled engine supports NVENC, but no compatible NVIDIA GPU and driver were detected."
+                "The bundled engine supports NVENC and AMF, but no compatible GPU and installed driver were detected."
             }
             .into(),
         }
@@ -142,14 +186,12 @@ fn encoder_line_present(output: &str, encoder: &str) -> bool {
 #[cfg(not(target_os = "macos"))]
 async fn runtime_encoder_probe(
     ffmpeg: &Path,
-    codec: &NvencCodec,
+    provider: &HardwareEncoderProvider,
+    codec: &HardwareCodec,
 ) -> (bool, Option<String>, Option<PathBuf>) {
-    let encoder = codec.encoder_name();
-    let probe_file = if *codec == NvencCodec::H264 {
-        Some(std::env::temp_dir().join(format!(
-            "yt-dlp-desktop-nvenc-probe-{}.h264",
-            Uuid::new_v4()
-        )))
+    let encoder = provider.encoder_name(codec);
+    let probe_file = if *codec == HardwareCodec::H264 {
+        Some(std::env::temp_dir().join(format!("yt-dlp-desktop-gpu-probe-{}.h264", Uuid::new_v4())))
     } else {
         None
     };
@@ -167,17 +209,8 @@ async fn runtime_encoder_probe(
         "-an".to_string(),
         "-c:v".to_string(),
         encoder.to_string(),
-        "-preset".to_string(),
-        "p5".to_string(),
-        "-tune".to_string(),
-        "hq".to_string(),
-        "-rc".to_string(),
-        "vbr".to_string(),
-        "-cq".to_string(),
-        "23".to_string(),
-        "-b:v".to_string(),
-        "0".to_string(),
     ];
+    append_encoder_options(&mut args, provider, 23);
     if let Some(path) = probe_file.as_ref() {
         args.extend([
             "-f".into(),
@@ -211,8 +244,9 @@ async fn runtime_encoder_probe(
 }
 
 #[cfg(not(target_os = "macos"))]
-async fn runtime_decoder_probe(ffmpeg: &Path, input: &Path) -> bool {
+async fn runtime_decoder_probe(ffmpeg: &Path, input: &Path, backend: &str) -> bool {
     let input = input.to_string_lossy();
+    let output_format = if backend == "cuda" { "cuda" } else { "d3d11" };
     run_probe(
         ffmpeg,
         &[
@@ -221,9 +255,9 @@ async fn runtime_decoder_probe(ffmpeg: &Path, input: &Path) -> bool {
             "-loglevel",
             "error",
             "-hwaccel",
-            "cuda",
+            backend,
             "-hwaccel_output_format",
-            "cuda",
+            output_format,
             "-i",
             &input,
             "-frames:v",
@@ -240,6 +274,33 @@ async fn runtime_decoder_probe(ffmpeg: &Path, input: &Path) -> bool {
     )
     .await
     .is_ok_and(|output| output.status.success())
+}
+
+fn append_encoder_options(args: &mut Vec<String>, provider: &HardwareEncoderProvider, quality: u8) {
+    match provider {
+        HardwareEncoderProvider::Nvenc => args.extend([
+            "-preset".into(),
+            "p5".into(),
+            "-tune".into(),
+            "hq".into(),
+            "-rc".into(),
+            "vbr".into(),
+            "-cq".into(),
+            quality.to_string(),
+            "-b:v".into(),
+            "0".into(),
+        ]),
+        HardwareEncoderProvider::Amf => args.extend([
+            "-usage".into(),
+            "transcoding".into(),
+            "-quality".into(),
+            "quality".into(),
+            "-rc".into(),
+            "qvbr".into(),
+            "-qvbr_quality_level".into(),
+            quality.to_string(),
+        ]),
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -275,14 +336,15 @@ pub struct ConversionOutcome {
     pub cancelled: bool,
 }
 
-pub async fn run_nvenc_conversion(
+pub async fn run_hardware_conversion(
     ffmpeg: &Path,
     input: &Path,
     options: &VideoConversionOptions,
+    encoder: &HardwareEncoderInfo,
     cancel: CancellationToken,
     events: tokio::sync::mpsc::UnboundedSender<RunnerEvent>,
 ) -> AppResult<ConversionOutcome> {
-    let output_path = available_output_path(input)?;
+    let output_path = available_output_path(input, &encoder.provider)?;
     let temporary_path = output_path.with_file_name(format!(
         ".{}.{}.part.mkv",
         output_path
@@ -298,23 +360,27 @@ pub async fn run_nvenc_conversion(
         .arg("-loglevel")
         .arg("warning")
         .arg("-y");
-    if options.use_cuda_decode {
+    if options.use_hardware_decode && encoder.decode_available {
+        let backend = encoder
+            .decode_backend
+            .as_deref()
+            .ok_or_else(|| AppError::Process("GPU decoder backend is unavailable".into()))?;
         command
             .arg("-hwaccel")
-            .arg("cuda")
+            .arg(backend)
             .arg("-hwaccel_output_format")
-            .arg("cuda");
+            .arg(if backend == "cuda" { "cuda" } else { "d3d11" });
     }
     command
         .arg("-i")
         .arg(input)
         .args(["-map", "0", "-c", "copy", "-c:v:0"])
-        .arg(options.codec.encoder_name())
-        .args(["-preset", "p5", "-tune", "hq", "-rc", "vbr", "-cq"])
-        .arg(options.quality.to_string())
+        .arg(&encoder.encoder);
+    let mut encoder_args = Vec::new();
+    append_encoder_options(&mut encoder_args, &encoder.provider, options.quality);
+    command
+        .args(encoder_args)
         .args([
-            "-b:v",
-            "0",
             "-map_metadata",
             "0",
             "-max_muxing_queue_size",
@@ -359,12 +425,13 @@ pub async fn run_nvenc_conversion(
         }
     });
     let progress_events = events.clone();
+    let conversion_stage = format!("{} GPU conversion", encoder.provider.label());
     let stdout_task = tokio::spawn(async move {
         let mut lines = BufReader::new(stdout).lines();
         while let Ok(Some(line)) = lines.next_line().await {
             if line == "progress=continue" {
                 let _ = progress_events.send(RunnerEvent::Progress(DownloadProgress {
-                    stage: Some("NVIDIA GPU conversion".into()),
+                    stage: Some(conversion_stage.clone()),
                     ..DownloadProgress::default()
                 }));
             }
@@ -406,13 +473,14 @@ pub async fn run_nvenc_conversion(
         Some(status) => {
             let _ = tokio::fs::remove_file(&temporary_path).await;
             Err(AppError::Process(format!(
-                "NVENC conversion exited with {status}. The original download was kept."
+                "{} conversion exited with {status}. The original download was kept.",
+                encoder.provider.label()
             )))
         }
     }
 }
 
-fn available_output_path(input: &Path) -> AppResult<PathBuf> {
+fn available_output_path(input: &Path, provider: &HardwareEncoderProvider) -> AppResult<PathBuf> {
     let parent = input
         .parent()
         .ok_or_else(|| AppError::Validation("The download has no parent folder".into()))?;
@@ -422,10 +490,14 @@ fn available_output_path(input: &Path) -> AppResult<PathBuf> {
         .filter(|value| !value.is_empty())
         .unwrap_or("download");
     for index in 1..=100 {
+        let label = match provider {
+            HardwareEncoderProvider::Nvenc => "NVENC",
+            HardwareEncoderProvider::Amf => "AMF",
+        };
         let suffix = if index == 1 {
-            " [NVENC]".to_string()
+            format!(" [{label}]")
         } else {
-            format!(" [NVENC {index}]")
+            format!(" [{label} {index}]")
         };
         let candidate = parent.join(format!("{stem}{suffix}.mkv"));
         if !candidate.exists() {
@@ -433,7 +505,7 @@ fn available_output_path(input: &Path) -> AppResult<PathBuf> {
         }
     }
     Err(AppError::Validation(
-        "Could not choose a unique NVENC output filename".into(),
+        "Could not choose a unique GPU-converted output filename".into(),
     ))
 }
 
@@ -488,10 +560,28 @@ mod tests {
 
     #[test]
     fn detects_encoder_names_as_fields_not_substrings() {
-        let fixture = " V....D h264_nvenc NVIDIA NVENC H.264 encoder\n V....D hevc_nvenc encoder";
+        let fixture = " V....D h264_nvenc NVIDIA NVENC H.264 encoder\n V....D hevc_nvenc encoder\n V....D h264_amf AMD AMF H.264 encoder";
         assert!(encoder_line_present(fixture, "h264_nvenc"));
         assert!(encoder_line_present(fixture, "hevc_nvenc"));
+        assert!(encoder_line_present(fixture, "h264_amf"));
         assert!(!encoder_line_present(fixture, "av1_nvenc"));
+    }
+
+    #[test]
+    fn uses_provider_specific_encoder_options() {
+        let mut nvenc = Vec::new();
+        append_encoder_options(&mut nvenc, &HardwareEncoderProvider::Nvenc, 21);
+        assert!(nvenc.windows(2).any(|pair| pair == ["-cq", "21"]));
+        assert!(!nvenc.iter().any(|value| value == "-qvbr_quality_level"));
+
+        let mut amf = Vec::new();
+        append_encoder_options(&mut amf, &HardwareEncoderProvider::Amf, 24);
+        assert!(amf.windows(2).any(|pair| pair == ["-usage", "transcoding"]));
+        assert!(
+            amf.windows(2)
+                .any(|pair| pair == ["-qvbr_quality_level", "24"])
+        );
+        assert!(!amf.iter().any(|value| value == "-cq"));
     }
 
     #[test]
@@ -499,8 +589,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let input = directory.path().join("video.webm");
         std::fs::write(&input, b"source").unwrap();
-        let output = available_output_path(&input).unwrap();
-        assert_eq!(output.file_name().unwrap(), "video [NVENC].mkv");
+        let output = available_output_path(&input, &HardwareEncoderProvider::Amf).unwrap();
+        assert_eq!(output.file_name().unwrap(), "video [AMF].mkv");
         assert!(input.exists());
     }
 }

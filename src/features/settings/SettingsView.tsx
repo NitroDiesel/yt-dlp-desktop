@@ -73,7 +73,7 @@ export function SettingsView() {
   const {
     settings,
     dependencies,
-    nvidiaAcceleration,
+    hardwareAcceleration,
     saveSettings,
     refreshEngineStatus,
   } = useAppStore();
@@ -85,6 +85,8 @@ export function SettingsView() {
   useEffect(() => setDraft(settings), [settings]);
   if (!draft) return null;
   const activeDraft = draft;
+  const detectedEncoders =
+    hardwareAcceleration?.encoders.filter((encoder) => encoder.available) ?? [];
 
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setDraft({ ...draft, [key]: value });
@@ -289,15 +291,15 @@ export function SettingsView() {
         <div className="settings-section__intro">
           <h2 id="gpu-settings">GPU acceleration</h2>
           <p>
-            NVIDIA acceleration is detected from the bundled engine, GPU, and
-            installed driver. It is used only for optional video conversion.
+            The app tests the bundled engine against the installed GPU driver,
+            then selects NVIDIA NVENC or AMD AMF automatically.
           </p>
         </div>
         <div className="settings-panel acceleration-panel">
           <div className="acceleration-summary">
             <span
               className={`acceleration-summary__icon ${
-                nvidiaAcceleration?.status === "available"
+                hardwareAcceleration?.status === "available"
                   ? "acceleration-summary__icon--ready"
                   : ""
               }`}
@@ -306,29 +308,34 @@ export function SettingsView() {
             </span>
             <div>
               <div className="dependency-card__title">
-                <h3>NVIDIA NVENC</h3>
+                <h3>Automatic hardware encoder</h3>
                 <span
                   className={`source-badge ${
-                    nvidiaAcceleration?.status === "available"
+                    hardwareAcceleration?.status === "available"
                       ? "source-badge--bundled"
                       : "source-badge--not_found"
                   }`}
                 >
-                  {nvidiaAcceleration?.status === "available"
+                  {hardwareAcceleration?.status === "available"
                     ? "Ready"
                     : "Unavailable"}
                 </span>
               </div>
               <p>
-                {nvidiaAcceleration?.message ??
-                  "Run the engine check to inspect NVIDIA capabilities."}
+                {hardwareAcceleration?.message ??
+                  "Run the engine check to inspect GPU capabilities."}
               </p>
             </div>
           </div>
-          <div className="capability-grid" aria-label="NVENC codec support">
-            {nvidiaAcceleration?.encoders.map((encoder) => (
-              <div className="capability-row" key={encoder.codec}>
+          <div className="capability-grid" aria-label="GPU codec support">
+            {detectedEncoders.map((encoder) => (
+              <div
+                className="capability-row"
+                key={`${encoder.provider}-${encoder.codec}`}
+              >
                 <span>
+                  {encoder.provider === "nvenc" ? "NVIDIA NVENC" : "AMD AMF"}{" "}
+                  ·{" "}
                   {encoder.codec === "h264"
                     ? "H.264"
                     : encoder.codec === "hevc"
@@ -350,26 +357,39 @@ export function SettingsView() {
                 </strong>
               </div>
             ))}
+            {detectedEncoders.length === 0 && (
+              <div className="capability-row">
+                <span>Detected hardware encoders</span>
+                <strong className="capability-state--muted">
+                  None — software path remains available
+                </strong>
+              </div>
+            )}
             <div className="capability-row">
               <span>
-                <Cpu aria-hidden="true" /> CUDA decoding
+                <Cpu aria-hidden="true" /> GPU decoding
               </span>
               <strong
                 className={
-                  nvidiaAcceleration?.cudaDecodeAvailable
+                  hardwareAcceleration?.encoders.some(
+                    (encoder) => encoder.decodeAvailable,
+                  )
                     ? "capability-state--ready"
                     : "capability-state--muted"
                 }
               >
-                {nvidiaAcceleration?.cudaDecodeAvailable
+                {hardwareAcceleration?.encoders.some(
+                  (encoder) => encoder.decodeAvailable,
+                )
                   ? "Hardware ready"
                   : "Software fallback"}
               </strong>
             </div>
           </div>
           <p className="acceleration-footnote">
-            A compatible NVIDIA GPU and driver 570 or newer are required on
-            Windows and Linux. NVIDIA does not provide NVENC on macOS.
+            GPU drivers are supplied by NVIDIA or AMD, not bundled with the
+            app. If neither runtime probe succeeds, conversion stays off and
+            normal yt-dlp downloads continue with no extra setup.
           </p>
         </div>
       </section>

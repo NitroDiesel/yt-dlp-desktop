@@ -54,7 +54,7 @@ Run on a clean non-developer account for every package:
 5. Start a long authorized download, cancel it, and confirm no child process remains.
 6. Queue two jobs, quit during one, relaunch, and verify recovery/interrupted states.
 7. Probe a playlist, reject the full-playlist confirmation once, then download an explicit range.
-8. On Windows/Linux with NVIDIA hardware, verify detected H.264/HEVC/AV1 availability, run one supported NVENC conversion, and verify CUDA decode independently. On unsupported hardware, verify the reason and disabled controls.
+8. On Windows/Linux with supported hardware, verify that only runtime-ready NVIDIA NVENC or AMD AMF codec options appear, run one automatic GPU conversion, and verify hardware decode independently when offered. On unsupported hardware, verify the reason and disabled controls; no GPU driver should be present in the package.
 9. Cancel a conversion and force one conversion failure; confirm the original media remains intact and no partial output remains.
 10. Exercise light/dark/system themes, keyboard focus, reduced motion, and a narrow window.
 11. Inspect diagnostics for URLs, credentials, cookie contents, and home-directory leakage.

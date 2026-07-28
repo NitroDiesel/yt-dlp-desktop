@@ -27,9 +27,9 @@ export const appApi = {
     invoke<AppSettings>("save_settings", { settings }),
   refreshDependencies: () =>
     invoke<AppSnapshot["dependencies"]>("refresh_dependencies"),
-  refreshNvidiaAcceleration: () =>
-    invoke<AppSnapshot["nvidiaAcceleration"]>(
-      "refresh_nvidia_acceleration",
+  refreshHardwareAcceleration: () =>
+    invoke<AppSnapshot["hardwareAcceleration"]>(
+      "refresh_hardware_acceleration",
     ),
   removeHistory: (jobId: string) =>
     invoke<void>("remove_history_entry", { jobId }),

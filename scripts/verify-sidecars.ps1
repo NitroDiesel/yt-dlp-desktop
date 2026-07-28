@@ -32,7 +32,10 @@ if ($LASTEXITCODE -ne 0) { throw "FFprobe version check failed." }
 
 if ($Target -match "windows|linux") {
   $encoders = (& $ffmpeg -hide_banner -encoders 2>&1) -join "`n"
-  foreach ($encoder in @("h264_nvenc", "hevc_nvenc", "av1_nvenc")) {
+  foreach ($encoder in @(
+      "h264_nvenc", "hevc_nvenc", "av1_nvenc",
+      "h264_amf", "hevc_amf", "av1_amf"
+    )) {
     if ($encoders -notmatch "(?m)^\s*V\S*\s+$encoder\s") {
       throw "The prepared FFmpeg build is missing $encoder."
     }

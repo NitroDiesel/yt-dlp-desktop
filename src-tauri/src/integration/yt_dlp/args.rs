@@ -83,14 +83,10 @@ pub fn validate_request(request: &DownloadRequest) -> AppResult<()> {
         return Err(AppError::Validation("Too many expert arguments".into()));
     }
     if let Some(conversion) = request.options.video_conversion.as_ref() {
-        let maximum = if conversion.codec == crate::domain::NvencCodec::Av1 {
-            63
-        } else {
-            51
-        };
+        let maximum = 51;
         if !(1..=maximum).contains(&conversion.quality) {
             return Err(AppError::Validation(format!(
-                "{} NVENC quality must be between 1 and {maximum}",
+                "{} GPU quality must be between 1 and {maximum}",
                 conversion.codec.label()
             )));
         }
@@ -286,12 +282,12 @@ mod tests {
     }
 
     #[test]
-    fn rejects_out_of_range_nvenc_quality() {
+    fn rejects_out_of_range_gpu_quality() {
         let mut value = request();
         value.options.video_conversion = Some(crate::domain::VideoConversionOptions {
-            codec: crate::domain::NvencCodec::H264,
+            codec: crate::domain::HardwareCodec::H264,
             quality: 52,
-            use_cuda_decode: false,
+            use_hardware_decode: false,
         });
         assert!(build_download_args(&value, &AppSettings::default()).is_err());
     }

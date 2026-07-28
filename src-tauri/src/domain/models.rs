@@ -52,21 +52,13 @@ pub enum MediaMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
-pub enum NvencCodec {
+pub enum HardwareCodec {
     H264,
     Hevc,
     Av1,
 }
 
-impl NvencCodec {
-    pub fn encoder_name(&self) -> &'static str {
-        match self {
-            Self::H264 => "h264_nvenc",
-            Self::Hevc => "hevc_nvenc",
-            Self::Av1 => "av1_nvenc",
-        }
-    }
-
+impl HardwareCodec {
     pub fn label(&self) -> &'static str {
         match self {
             Self::H264 => "H.264",
@@ -77,11 +69,39 @@ impl NvencCodec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum HardwareEncoderProvider {
+    Nvenc,
+    Amf,
+}
+
+impl HardwareEncoderProvider {
+    pub fn encoder_name(&self, codec: &HardwareCodec) -> &'static str {
+        match (self, codec) {
+            (Self::Nvenc, HardwareCodec::H264) => "h264_nvenc",
+            (Self::Nvenc, HardwareCodec::Hevc) => "hevc_nvenc",
+            (Self::Nvenc, HardwareCodec::Av1) => "av1_nvenc",
+            (Self::Amf, HardwareCodec::H264) => "h264_amf",
+            (Self::Amf, HardwareCodec::Hevc) => "hevc_amf",
+            (Self::Amf, HardwareCodec::Av1) => "av1_amf",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Nvenc => "NVIDIA NVENC",
+            Self::Amf => "AMD AMF",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoConversionOptions {
-    pub codec: NvencCodec,
+    pub codec: HardwareCodec,
     pub quality: u8,
-    pub use_cuda_decode: bool,
+    #[serde(default, alias = "useCudaDecode")]
+    pub use_hardware_decode: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -244,42 +264,54 @@ pub struct DependencyInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct NvencEncoderInfo {
-    pub codec: NvencCodec,
+pub struct HardwareEncoderInfo {
+    pub provider: HardwareEncoderProvider,
+    pub codec: HardwareCodec,
     pub encoder: String,
     pub compiled: bool,
     pub available: bool,
+    pub decode_backend: Option<String>,
+    pub decode_available: bool,
     pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct NvidiaAccelerationInfo {
+pub struct HardwareAccelerationInfo {
     pub status: String,
-    pub cuda_decode_compiled: bool,
-    pub cuda_decode_available: bool,
-    pub encoders: Vec<NvencEncoderInfo>,
+    pub encoders: Vec<HardwareEncoderInfo>,
     pub message: String,
 }
 
-impl NvidiaAccelerationInfo {
+impl HardwareAccelerationInfo {
     pub fn unavailable(status: &str, message: impl Into<String>) -> Self {
         Self {
             status: status.into(),
-            cuda_decode_compiled: false,
-            cuda_decode_available: false,
-            encoders: [NvencCodec::H264, NvencCodec::Hevc, NvencCodec::Av1]
+            encoders: [HardwareEncoderProvider::Nvenc, HardwareEncoderProvider::Amf]
                 .into_iter()
-                .map(|codec| NvencEncoderInfo {
-                    encoder: codec.encoder_name().into(),
-                    codec,
-                    compiled: false,
-                    available: false,
-                    message: None,
+                .flat_map(|provider| {
+                    [HardwareCodec::H264, HardwareCodec::Hevc, HardwareCodec::Av1]
+                        .into_iter()
+                        .map(move |codec| HardwareEncoderInfo {
+                            encoder: provider.encoder_name(&codec).into(),
+                            provider: provider.clone(),
+                            codec,
+                            compiled: false,
+                            available: false,
+                            decode_backend: None,
+                            decode_available: false,
+                            message: None,
+                        })
                 })
                 .collect(),
             message: message.into(),
         }
+    }
+
+    pub fn encoder_for(&self, codec: &HardwareCodec) -> Option<&HardwareEncoderInfo> {
+        self.encoders
+            .iter()
+            .find(|encoder| &encoder.codec == codec && encoder.available)
     }
 }
 
@@ -290,7 +322,7 @@ pub struct AppSnapshot {
     pub queue: Vec<DownloadJob>,
     pub history: Vec<DownloadJob>,
     pub dependencies: Vec<DependencyInfo>,
-    pub nvidia_acceleration: NvidiaAccelerationInfo,
+    pub hardware_acceleration: HardwareAccelerationInfo,
     pub queue_paused: bool,
 }
 

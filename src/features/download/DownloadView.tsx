@@ -21,7 +21,7 @@ import type {
   DownloadOptions,
   DownloadRequest,
   MediaMode,
-  NvencCodec,
+  HardwareCodec,
 } from "../../types/contracts";
 
 const qualityOptions = [
@@ -90,7 +90,7 @@ export function DownloadView() {
   const {
     settings,
     dependencies,
-    nvidiaAcceleration,
+    hardwareAcceleration,
     probe,
     isAnalyzing,
     analyzeError,
@@ -120,13 +120,15 @@ export function DownloadView() {
     (dependency) =>
       dependency.kind === "ffmpeg" && dependency.status === "available",
   );
-  const nvencReady =
+  const gpuReady =
     !probe?.isPlaylist &&
-    nvidiaAcceleration?.status === "available" &&
-    nvidiaAcceleration.encoders.some((encoder) => encoder.available);
-  const selectedNvenc = options.videoConversion
-    ? nvidiaAcceleration?.encoders.find(
-        (encoder) => encoder.codec === options.videoConversion?.codec,
+    hardwareAcceleration?.status === "available" &&
+    hardwareAcceleration.encoders.some((encoder) => encoder.available);
+  const selectedEncoder = options.videoConversion
+    ? hardwareAcceleration?.encoders.find(
+        (encoder) =>
+          encoder.codec === options.videoConversion?.codec &&
+          encoder.available,
       )
     : undefined;
 
@@ -454,37 +456,37 @@ export function DownloadView() {
                     <div>
                       <div className="gpu-conversion__title-row">
                         <h3 id="gpu-conversion-title">
-                          NVIDIA GPU conversion
+                          Automatic GPU conversion
                         </h3>
                         <span
-                          className={`capability-label capability-label--${nvencReady ? "ready" : "unavailable"}`}
+                          className={`capability-label capability-label--${gpuReady ? "ready" : "unavailable"}`}
                         >
-                          {nvencReady ? "Ready" : "Unavailable"}
+                          {gpuReady ? "Ready" : "Unavailable"}
                         </span>
                       </div>
                       <p>
-                        Re-encode the finished video with NVENC into a new MKV.
-                        This accelerates conversion, not the network download.
-                        The source is removed only after the MKV is finalized.
+                        Re-encode with whichever supported GPU is ready. NVENC
+                        and AMF are detected automatically; the source is
+                        removed only after the MKV is finalized.
                       </p>
                     </div>
                     <label className="switch-control">
                       <input
                         type="checkbox"
-                        aria-label="Convert video with NVIDIA NVENC"
+                        aria-label="Convert video with automatic GPU acceleration"
                         checked={Boolean(options.videoConversion)}
-                        disabled={!nvencReady}
+                        disabled={!gpuReady}
                         onChange={(event) =>
                           setOptions({
                             ...options,
                             videoConversion: event.target.checked
                               ? {
                                   codec:
-                                    nvidiaAcceleration?.encoders.find(
+                                    hardwareAcceleration?.encoders.find(
                                       (encoder) => encoder.available,
                                     )?.codec ?? "h264",
                                   quality: 23,
-                                  useCudaDecode: false,
+                                  useHardwareDecode: false,
                                 }
                               : undefined,
                           })
@@ -494,12 +496,12 @@ export function DownloadView() {
                     </label>
                   </div>
 
-                  {!nvencReady && (
+                  {!gpuReady && (
                     <p className="gpu-conversion__status">
                       {probe.isPlaylist
                         ? "GPU conversion is currently available for single-video jobs so every playlist item remains predictable."
-                        : nvidiaAcceleration?.message ??
-                          "Checking the bundled FFmpeg engine and NVIDIA driver…"}
+                        : hardwareAcceleration?.message ??
+                          "Checking the bundled FFmpeg engine, GPU, and installed driver…"}
                     </p>
                   )}
 
@@ -510,7 +512,7 @@ export function DownloadView() {
                         <select
                           value={options.videoConversion.codec}
                           onChange={(event) => {
-                            const codec = event.target.value as NvencCodec;
+                            const codec = event.target.value as HardwareCodec;
                             setOptions({
                               ...options,
                               videoConversion: {
@@ -518,26 +520,38 @@ export function DownloadView() {
                                 codec,
                                 quality: Math.min(
                                   options.videoConversion!.quality,
-                                  codec === "av1" ? 63 : 51,
+                                  51,
                                 ),
                               },
                             });
                           }}
                         >
-                          {nvidiaAcceleration?.encoders.map((encoder) => (
-                            <option
-                              key={encoder.codec}
-                              value={encoder.codec}
-                              disabled={!encoder.available}
-                            >
-                              {encoder.codec === "h264"
-                                ? "H.264 — most compatible"
-                                : encoder.codec === "hevc"
-                                  ? "HEVC — smaller files"
-                                  : "AV1 — newest GPUs"}{" "}
-                              {!encoder.available ? "(not supported)" : ""}
-                            </option>
-                          ))}
+                          {(["h264", "hevc", "av1"] as HardwareCodec[]).map(
+                            (codec) => {
+                              const encoder =
+                                hardwareAcceleration?.encoders.find(
+                                  (candidate) =>
+                                    candidate.codec === codec &&
+                                    candidate.available,
+                                );
+                              return (
+                                <option
+                                  key={codec}
+                                  value={codec}
+                                  disabled={!encoder}
+                                >
+                                  {codec === "h264"
+                                    ? "H.264 — most compatible"
+                                    : codec === "hevc"
+                                      ? "HEVC — smaller files"
+                                      : "AV1 — newest GPUs"}{" "}
+                                  {encoder
+                                    ? `(${encoder.provider === "nvenc" ? "NVIDIA NVENC" : "AMD AMF"})`
+                                    : "(not supported)"}
+                                </option>
+                              );
+                            },
+                          )}
                         </select>
                       </label>
                       <label className="field">
@@ -547,9 +561,7 @@ export function DownloadView() {
                         <input
                           type="range"
                           min="1"
-                          max={
-                            options.videoConversion.codec === "av1" ? 63 : 51
-                          }
+                          max="51"
                           value={options.videoConversion.quality}
                           onChange={(event) =>
                             setOptions({
@@ -566,17 +578,14 @@ export function DownloadView() {
                       <label className="check-row gpu-decode-control">
                         <input
                           type="checkbox"
-                          checked={options.videoConversion.useCudaDecode}
-                          disabled={
-                            !nvidiaAcceleration?.cudaDecodeAvailable ||
-                            !selectedNvenc?.available
-                          }
+                          checked={options.videoConversion.useHardwareDecode}
+                          disabled={!selectedEncoder?.decodeAvailable}
                           onChange={(event) =>
                             setOptions({
                               ...options,
                               videoConversion: {
                                 ...options.videoConversion!,
-                                useCudaDecode: event.target.checked,
+                                useHardwareDecode: event.target.checked,
                               },
                             })
                           }

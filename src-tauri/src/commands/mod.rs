@@ -5,8 +5,8 @@ use tauri::State;
 use crate::{
     application::AppService,
     domain::{
-        AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadRequest, MediaProbe,
-        NvidiaAccelerationInfo,
+        AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadRequest,
+        HardwareAccelerationInfo, MediaProbe,
     },
     error::{AppError, AppResult},
     platform,
@@ -91,10 +91,10 @@ pub async fn refresh_dependencies(
     Ok(service.dependencies().await)
 }
 #[tauri::command]
-pub async fn refresh_nvidia_acceleration(
+pub async fn refresh_hardware_acceleration(
     service: State<'_, Arc<AppService>>,
-) -> AppResult<NvidiaAccelerationInfo> {
-    Ok(service.nvidia_acceleration().await)
+) -> AppResult<HardwareAccelerationInfo> {
+    Ok(service.hardware_acceleration().await)
 }
 #[tauri::command]
 pub async fn remove_history_entry(

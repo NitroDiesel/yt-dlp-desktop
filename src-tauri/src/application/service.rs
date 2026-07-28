@@ -18,12 +18,12 @@ use uuid::Uuid;
 use crate::{
     domain::{
         AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadProgress, DownloadRequest,
-        JobStatus, MediaProbe, NvidiaAccelerationInfo,
+        HardwareAccelerationInfo, JobStatus, MediaProbe,
     },
     error::{AppError, AppResult},
     integration::{
         dependencies::DependencyManager,
-        ffmpeg::run_nvenc_conversion,
+        ffmpeg::run_hardware_conversion,
         yt_dlp::{RunnerEvent, build_download_args, probe, run_download},
     },
     persistence::Database,
@@ -65,16 +65,16 @@ impl AppService {
 
     pub async fn snapshot(&self) -> AppResult<AppSnapshot> {
         let settings = self.settings.read().await.clone();
-        let (dependencies, nvidia_acceleration) = tokio::join!(
+        let (dependencies, hardware_acceleration) = tokio::join!(
             self.dependencies.inspect_all(&settings),
-            self.dependencies.inspect_nvidia_acceleration(&settings)
+            self.dependencies.inspect_hardware_acceleration(&settings)
         );
         Ok(AppSnapshot {
             settings,
             queue: self.db.queue().await?,
             history: self.db.history().await?,
             dependencies,
-            nvidia_acceleration,
+            hardware_acceleration,
             queue_paused: self.queue_paused.load(Ordering::SeqCst),
         })
     }
@@ -138,32 +138,31 @@ impl AppService {
         if let Some(conversion) = request.options.video_conversion.as_ref() {
             if request.is_playlist {
                 return Err(AppError::Validation(
-                    "NVIDIA conversion currently supports single-video jobs only".into(),
+                    "GPU conversion currently supports single-video jobs only".into(),
                 ));
             }
             if request.options.mode != crate::domain::MediaMode::Video {
                 return Err(AppError::Validation(
-                    "NVIDIA conversion is available for video downloads only".into(),
+                    "GPU conversion is available for video downloads only".into(),
                 ));
             }
             validate_video_conversion(conversion)?;
             let capability = self
                 .dependencies
-                .inspect_nvidia_acceleration(&settings)
+                .inspect_hardware_acceleration(&settings)
                 .await;
-            let encoder = capability
-                .encoders
-                .iter()
-                .find(|encoder| encoder.codec == conversion.codec);
-            if !encoder.is_some_and(|encoder| encoder.available) {
+            let encoder = capability.encoder_for(&conversion.codec);
+            if encoder.is_none() {
                 return Err(AppError::DependencyMissing(format!(
-                    "{} NVENC is not available on this computer",
+                    "No working NVENC or AMF encoder is available for {} on this computer",
                     conversion.codec.label()
                 )));
             }
-            if conversion.use_cuda_decode && !capability.cuda_decode_available {
+            if conversion.use_hardware_decode
+                && !encoder.is_some_and(|encoder| encoder.decode_available)
+            {
                 return Err(AppError::DependencyMissing(
-                    "CUDA decoding is not available on this computer".into(),
+                    "GPU decoding is not available for the automatically selected encoder".into(),
                 ));
             }
         }
@@ -298,56 +297,68 @@ impl AppService {
             match (ffmpeg, input) {
                 (Some(ffmpeg), Some(input)) => {
                     job.status = JobStatus::PostProcessing;
-                    job.progress.stage = Some("NVIDIA GPU conversion".into());
+                    job.progress.stage = Some("Automatic GPU conversion".into());
                     let _ = self.db.update_job(&job).await;
                     let _ = self.app.emit("download-job-changed", &job);
                     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                     let conversion_cancel = cancel.clone();
-                    let conversion_options = conversion.clone();
-                    let converter = tokio::spawn(async move {
-                        run_nvenc_conversion(
-                            &ffmpeg,
-                            &input,
-                            &conversion_options,
-                            conversion_cancel,
-                            tx,
-                        )
-                        .await
-                    });
-                    while let Some(event) = rx.recv().await {
-                        match event {
-                            RunnerEvent::Progress(progress) => {
-                                job.progress.stage = progress.stage;
-                                job.status = JobStatus::PostProcessing;
-                            }
-                            RunnerEvent::Diagnostic(line) => {
-                                if job.diagnostics.len() >= 100 {
-                                    job.diagnostics.remove(0);
+                    let capability = self
+                        .dependencies
+                        .inspect_hardware_acceleration(&settings)
+                        .await;
+                    if let Some(encoder) = capability.encoder_for(&conversion.codec).cloned() {
+                        let conversion_options = conversion.clone();
+                        let converter = tokio::spawn(async move {
+                            run_hardware_conversion(
+                                &ffmpeg,
+                                &input,
+                                &conversion_options,
+                                &encoder,
+                                conversion_cancel,
+                                tx,
+                            )
+                            .await
+                        });
+                        while let Some(event) = rx.recv().await {
+                            match event {
+                                RunnerEvent::Progress(progress) => {
+                                    job.progress.stage = progress.stage;
+                                    job.status = JobStatus::PostProcessing;
                                 }
-                                job.diagnostics.push(line);
+                                RunnerEvent::Diagnostic(line) => {
+                                    if job.diagnostics.len() >= 100 {
+                                        job.diagnostics.remove(0);
+                                    }
+                                    job.diagnostics.push(line);
+                                }
+                                RunnerEvent::Output { .. } | RunnerEvent::PostProcess(_) => {}
                             }
-                            RunnerEvent::Output { .. } | RunnerEvent::PostProcess(_) => {}
+                            let _ = self.db.update_job(&job).await;
+                            let _ = self.app.emit("download-job-changed", &job);
                         }
-                        let _ = self.db.update_job(&job).await;
-                        let _ = self.app.emit("download-job-changed", &job);
-                    }
-                    match converter.await {
-                        Ok(Ok(converted)) if converted.cancelled => {
-                            outcome.cancelled = true;
-                            outcome.diagnostics.extend(converted.diagnostics);
+                        match converter.await {
+                            Ok(Ok(converted)) if converted.cancelled => {
+                                outcome.cancelled = true;
+                                outcome.diagnostics.extend(converted.diagnostics);
+                            }
+                            Ok(Ok(converted)) => {
+                                outcome.output_path =
+                                    Some(converted.output_path.to_string_lossy().into_owned());
+                                outcome.diagnostics.extend(converted.diagnostics);
+                            }
+                            Ok(Err(error)) => result = Err(error),
+                            Err(error) => result = Err(AppError::Process(error.to_string())),
                         }
-                        Ok(Ok(converted)) => {
-                            outcome.output_path =
-                                Some(converted.output_path.to_string_lossy().into_owned());
-                            outcome.diagnostics.extend(converted.diagnostics);
-                        }
-                        Ok(Err(error)) => result = Err(error),
-                        Err(error) => result = Err(AppError::Process(error.to_string())),
+                    } else {
+                        result = Err(AppError::DependencyMissing(format!(
+                            "No working NVENC or AMF encoder is available for {}",
+                            conversion.codec.label()
+                        )));
                     }
                 }
                 _ => {
                     result = Err(AppError::DependencyMissing(
-                        "FFmpeg or the downloaded source file is unavailable for NVIDIA conversion"
+                        "FFmpeg or the downloaded source file is unavailable for GPU conversion"
                             .into(),
                     ));
                 }
@@ -442,23 +453,19 @@ impl AppService {
         self.dependencies.inspect_all(&settings).await
     }
 
-    pub async fn nvidia_acceleration(&self) -> NvidiaAccelerationInfo {
+    pub async fn hardware_acceleration(&self) -> HardwareAccelerationInfo {
         let settings = self.settings.read().await.clone();
         self.dependencies
-            .inspect_nvidia_acceleration(&settings)
+            .inspect_hardware_acceleration(&settings)
             .await
     }
 }
 
 fn validate_video_conversion(conversion: &crate::domain::VideoConversionOptions) -> AppResult<()> {
-    let maximum = if conversion.codec == crate::domain::NvencCodec::Av1 {
-        63
-    } else {
-        51
-    };
+    let maximum = 51;
     if !(1..=maximum).contains(&conversion.quality) {
         return Err(AppError::Validation(format!(
-            "{} NVENC quality must be between 1 and {maximum}",
+            "{} GPU quality must be between 1 and {maximum}",
             conversion.codec.label()
         )));
     }

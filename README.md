@@ -15,13 +15,13 @@ The installer includes pinned, checksum-verified builds of **yt-dlp, FFmpeg, FFp
 - Restores queued work after a restart and marks unexpectedly stopped work as interrupted.
 - Runs yt-dlp as a direct child process with typed arguments, bounded diagnostics, and process-tree cancellation.
 - Detects bundled, managed, custom, and system tools without depending on the launch directory.
-- Detects usable NVIDIA NVENC/NVDEC capabilities and can optionally re-encode a completed video on the GPU.
+- Detects usable NVIDIA NVENC or AMD AMF encoders at runtime and can optionally re-encode a completed video on the GPU.
 
 ## Install
 
 Download the package for your platform from GitHub Releases and install it normally. The first launch is ready for analyzing, downloading, merging, audio conversion, and subtitle post-processing. Custom executable overrides in **Settings → Download engine** are optional expert controls.
 
-The initial release targets Windows 10 22H2/11 x64, macOS 12+ (Intel and Apple silicon), and x64 Linux distributions with glibc 2.28/kernel 4.18 or newer. NVENC requires a compatible NVIDIA GPU and driver 570+ on Windows/Linux; NVIDIA acceleration is not available on macOS. Packages should be signed before a public stable release; see [Releasing](docs/RELEASING.md).
+The initial release targets Windows 10 22H2/11 x64, macOS 12+ (Intel and Apple silicon), and x64 Linux distributions with glibc 2.28/kernel 4.18 or newer. GPU conversion appears only when the bundled FFmpeg engine completes a real runtime encode through an installed NVIDIA or AMD driver; no vendor driver/runtime is bundled or required for normal downloads. NVENC and AMF conversion are unavailable on macOS in this release. Packages should be signed before a public stable release; see [Releasing](docs/RELEASING.md).
 
 ## Develop
 
