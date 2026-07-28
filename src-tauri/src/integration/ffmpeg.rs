@@ -1,37 +1,42 @@
 use std::{
     path::{Path, PathBuf},
-    process::{Output, Stdio},
+    process::Stdio,
     sync::Arc,
 };
 
+#[cfg(not(target_os = "macos"))]
+use std::process::Output;
+#[cfg(not(target_os = "macos"))]
+use tokio::time::timeout;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
     sync::Mutex,
-    time::{Duration, sleep, timeout},
+    time::{Duration, sleep},
 };
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    domain::{
-        DownloadProgress, NvencCodec, NvencEncoderInfo, NvidiaAccelerationInfo,
-        VideoConversionOptions,
-    },
+    domain::{DownloadProgress, NvencCodec, NvidiaAccelerationInfo, VideoConversionOptions},
     error::{AppError, AppResult},
     integration::yt_dlp::RunnerEvent,
 };
 
+#[cfg(not(target_os = "macos"))]
+use crate::domain::NvencEncoderInfo;
+
+#[cfg(not(target_os = "macos"))]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
 
 pub async fn inspect_nvidia_acceleration(ffmpeg: Option<&Path>) -> NvidiaAccelerationInfo {
     #[cfg(target_os = "macos")]
     {
         let _ = ffmpeg;
-        return NvidiaAccelerationInfo::unavailable(
+        NvidiaAccelerationInfo::unavailable(
             "unsupported_platform",
             "NVENC and NVDEC require an NVIDIA GPU and are supported on Windows and Linux. The bundled macOS engine uses Apple VideoToolbox instead.",
-        );
+        )
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -124,6 +129,7 @@ pub async fn inspect_nvidia_acceleration(ffmpeg: Option<&Path>) -> NvidiaAcceler
     }
 }
 
+#[cfg(any(not(target_os = "macos"), test))]
 fn encoder_line_present(output: &str, encoder: &str) -> bool {
     output.lines().any(|line| {
         let mut fields = line.split_whitespace();
@@ -133,6 +139,7 @@ fn encoder_line_present(output: &str, encoder: &str) -> bool {
     })
 }
 
+#[cfg(not(target_os = "macos"))]
 async fn runtime_encoder_probe(
     ffmpeg: &Path,
     codec: &NvencCodec,
@@ -203,6 +210,7 @@ async fn runtime_encoder_probe(
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 async fn runtime_decoder_probe(ffmpeg: &Path, input: &Path) -> bool {
     let input = input.to_string_lossy();
     run_probe(
@@ -234,6 +242,7 @@ async fn runtime_decoder_probe(ffmpeg: &Path, input: &Path) -> bool {
     .is_ok_and(|output| output.status.success())
 }
 
+#[cfg(not(target_os = "macos"))]
 async fn run_probe(executable: &Path, args: &[&str]) -> Result<Output, String> {
     let mut command = Command::new(executable);
     command
@@ -249,6 +258,7 @@ async fn run_probe(executable: &Path, args: &[&str]) -> Result<Output, String> {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn short_process_message(output: &Output, fallback: &str) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let message = stderr
