@@ -18,13 +18,13 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    domain::{DownloadProgress, NvencCodec, NvidiaAccelerationInfo, VideoConversionOptions},
+    domain::{DownloadProgress, NvidiaAccelerationInfo, VideoConversionOptions},
     error::{AppError, AppResult},
     integration::yt_dlp::RunnerEvent,
 };
 
 #[cfg(not(target_os = "macos"))]
-use crate::domain::NvencEncoderInfo;
+use crate::domain::{NvencCodec, NvencEncoderInfo};
 
 #[cfg(not(target_os = "macos"))]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
