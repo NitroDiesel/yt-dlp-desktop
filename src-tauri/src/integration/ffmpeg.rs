@@ -20,13 +20,16 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    domain::{DownloadProgress, HardwareAccelerationInfo, VideoConversionOptions},
+    domain::{
+        DownloadProgress, HardwareAccelerationInfo, HardwareEncoderInfo, HardwareEncoderProvider,
+        VideoConversionOptions,
+    },
     error::{AppError, AppResult},
     integration::yt_dlp::RunnerEvent,
 };
 
 #[cfg(not(target_os = "macos"))]
-use crate::domain::{HardwareCodec, HardwareEncoderInfo, HardwareEncoderProvider};
+use crate::domain::HardwareCodec;
 
 #[cfg(not(target_os = "macos"))]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
