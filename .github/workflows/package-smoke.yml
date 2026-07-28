@@ -54,7 +54,57 @@ jobs:
       - name: Prepare Unix sidecars
         if: runner.os != 'Windows'
         run: ./scripts/prepare-sidecars.sh '${{ matrix.target }}'
+      - name: Verify Windows sidecars
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/verify-sidecars.ps1 -Target '${{ matrix.target }}'
+      - name: Verify Unix sidecars
+        if: runner.os != 'Windows'
+        run: bash ./scripts/verify-sidecars.sh '${{ matrix.target }}'
       - run: pnpm tauri build --target '${{ matrix.target }}' --bundles '${{ matrix.bundles }}'
+      - name: Verify Windows installer contains every sidecar
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "src-tauri/target/${{ matrix.target }}/release/bundle/nsis" -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer was not created." }
+          $listing = (& 7z l $installer.FullName 2>&1) -join "`n"
+          foreach ($binary in @("yt-dlp.exe", "deno.exe", "ffmpeg.exe", "ffprobe.exe")) {
+            if ($listing -notmatch [regex]::Escape($binary)) {
+              throw "NSIS installer does not contain $binary."
+            }
+          }
+      - name: Verify Linux packages contain every sidecar
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/deb" -type f -name '*.deb' -print -quit)"
+          listing="$(dpkg-deb --contents "$deb")"
+          for binary in yt-dlp deno ffmpeg ffprobe; do
+            grep -Eq "/${binary}(-${{ matrix.target }})?[[:space:]]*$" <<<"$listing"
+          done
+          appimage="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/appimage" -type f -name '*.AppImage' -print -quit)"
+          extract_dir="$(mktemp -d)"
+          (
+            cd "$extract_dir"
+            "$GITHUB_WORKSPACE/$appimage" --appimage-extract >/dev/null
+          )
+          for binary in yt-dlp deno ffmpeg ffprobe; do
+            find "$extract_dir/squashfs-root" -type f -name "$binary" -print -quit | grep -q .
+          done
+      - name: Verify macOS disk image contains every sidecar
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/dmg" -type f -name '*.dmg' -print -quit)"
+          mount_point="$(mktemp -d)"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" >/dev/null
+          trap 'hdiutil detach "$mount_point" >/dev/null' EXIT
+          for binary in yt-dlp deno ffmpeg ffprobe; do
+            find "$mount_point" -path '*/Contents/MacOS/*' -type f -name "$binary" -print -quit | grep -q .
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: yt-dlp-desktop-${{ matrix.target }}

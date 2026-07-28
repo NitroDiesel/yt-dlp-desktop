@@ -40,6 +40,7 @@ pub fn run() {
             commands::set_queue_paused,
             commands::save_settings,
             commands::refresh_dependencies,
+            commands::refresh_nvidia_acceleration,
             commands::remove_history_entry,
             commands::open_job_output,
             commands::reveal_job_output,

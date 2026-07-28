@@ -3,10 +3,13 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   Check,
   CircleAlert,
+  Cpu,
   FileCog,
   FolderOpen,
   RefreshCw,
   Save,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
 import { useAppStore } from "../../app/store";
 import type { AppSettings, DependencyInfo } from "../../types/contracts";
@@ -37,7 +40,14 @@ function DependencyCard({
         )}
       </span>
       <div>
-        <h3>{labels[dependency.kind]}</h3>
+        <div className="dependency-card__title">
+          <h3>{labels[dependency.kind]}</h3>
+          <span className={`source-badge source-badge--${dependency.source}`}>
+            {dependency.source === "bundled"
+              ? "Bundled"
+              : dependency.source.replaceAll("_", " ")}
+          </span>
+        </div>
         <p>
           {ready
             ? dependency.version || "Available"
@@ -46,8 +56,8 @@ function DependencyCard({
         <small>
           {dependency.path ||
             (dependency.kind === "javascript_runtime"
-              ? "Deno is recommended for full YouTube support"
-              : "Choose an executable or install it on this system")}
+              ? "The bundled JavaScript runtime could not be found"
+              : "The packaged executable could not be found")}
         </small>
       </div>
       {onChoose && (
@@ -60,8 +70,13 @@ function DependencyCard({
 }
 
 export function SettingsView() {
-  const { settings, dependencies, saveSettings, refreshDependencies } =
-    useAppStore();
+  const {
+    settings,
+    dependencies,
+    nvidiaAcceleration,
+    saveSettings,
+    refreshEngineStatus,
+  } = useAppStore();
   const [draft, setDraft] = useState<AppSettings | undefined>(settings);
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -239,7 +254,7 @@ export function SettingsView() {
           </p>
           <button
             className="button button--quiet"
-            onClick={() => void refreshDependencies()}
+            onClick={() => void refreshEngineStatus()}
           >
             <RefreshCw aria-hidden="true" /> Check again
           </button>
@@ -257,13 +272,105 @@ export function SettingsView() {
             />
           ))}
           <div className="legal-note">
-            <FileCog aria-hidden="true" />
+            <ShieldCheck aria-hidden="true" />
             <p>
-              <strong>yt-dlp and Deno are included with the app.</strong> Their
-              pinned, verified versions update with app releases. FFmpeg uses
-              your system or a custom installation in this release.
+              <strong>
+                yt-dlp, FFmpeg, FFprobe, and Deno are included with the app.
+              </strong>{" "}
+              Every release pins and checksum-verifies its binaries. Custom
+              overrides remain available for experts; a normal installation
+              needs no separate tools.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="settings-section" aria-labelledby="gpu-settings">
+        <div className="settings-section__intro">
+          <h2 id="gpu-settings">GPU acceleration</h2>
+          <p>
+            NVIDIA acceleration is detected from the bundled engine, GPU, and
+            installed driver. It is used only for optional video conversion.
+          </p>
+        </div>
+        <div className="settings-panel acceleration-panel">
+          <div className="acceleration-summary">
+            <span
+              className={`acceleration-summary__icon ${
+                nvidiaAcceleration?.status === "available"
+                  ? "acceleration-summary__icon--ready"
+                  : ""
+              }`}
+            >
+              <Zap aria-hidden="true" />
+            </span>
+            <div>
+              <div className="dependency-card__title">
+                <h3>NVIDIA NVENC</h3>
+                <span
+                  className={`source-badge ${
+                    nvidiaAcceleration?.status === "available"
+                      ? "source-badge--bundled"
+                      : "source-badge--not_found"
+                  }`}
+                >
+                  {nvidiaAcceleration?.status === "available"
+                    ? "Ready"
+                    : "Unavailable"}
+                </span>
+              </div>
+              <p>
+                {nvidiaAcceleration?.message ??
+                  "Run the engine check to inspect NVIDIA capabilities."}
+              </p>
+            </div>
+          </div>
+          <div className="capability-grid" aria-label="NVENC codec support">
+            {nvidiaAcceleration?.encoders.map((encoder) => (
+              <div className="capability-row" key={encoder.codec}>
+                <span>
+                  {encoder.codec === "h264"
+                    ? "H.264"
+                    : encoder.codec === "hevc"
+                      ? "HEVC"
+                      : "AV1"}
+                </span>
+                <strong
+                  className={
+                    encoder.available
+                      ? "capability-state--ready"
+                      : "capability-state--muted"
+                  }
+                >
+                  {encoder.available
+                    ? "Hardware ready"
+                    : encoder.compiled
+                      ? "GPU or driver unsupported"
+                      : "Not in this build"}
+                </strong>
+              </div>
+            ))}
+            <div className="capability-row">
+              <span>
+                <Cpu aria-hidden="true" /> CUDA decoding
+              </span>
+              <strong
+                className={
+                  nvidiaAcceleration?.cudaDecodeAvailable
+                    ? "capability-state--ready"
+                    : "capability-state--muted"
+                }
+              >
+                {nvidiaAcceleration?.cudaDecodeAvailable
+                  ? "Hardware ready"
+                  : "Software fallback"}
+              </strong>
+            </div>
+          </div>
+          <p className="acceleration-footnote">
+            A compatible NVIDIA GPU and driver 570 or newer are required on
+            Windows and Linux. NVIDIA does not provide NVENC on macOS.
+          </p>
         </div>
       </section>
 

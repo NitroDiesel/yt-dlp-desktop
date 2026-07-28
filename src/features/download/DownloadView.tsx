@@ -5,12 +5,14 @@ import {
   ArrowRight,
   ChevronDown,
   Clipboard,
+  Cpu,
   Download,
   FolderOpen,
   ListPlus,
   Radio,
   Settings2,
   Sparkles,
+  Zap,
   X,
 } from "lucide-react";
 import { useAppStore } from "../../app/store";
@@ -19,6 +21,7 @@ import type {
   DownloadOptions,
   DownloadRequest,
   MediaMode,
+  NvencCodec,
 } from "../../types/contracts";
 
 const qualityOptions = [
@@ -53,6 +56,7 @@ const defaultOptions: DownloadOptions = {
   embedMetadata: true,
   embedThumbnail: false,
   customArguments: [],
+  videoConversion: undefined,
 };
 
 function SegmentedMode({
@@ -86,6 +90,7 @@ export function DownloadView() {
   const {
     settings,
     dependencies,
+    nvidiaAcceleration,
     probe,
     isAnalyzing,
     analyzeError,
@@ -115,6 +120,15 @@ export function DownloadView() {
     (dependency) =>
       dependency.kind === "ffmpeg" && dependency.status === "available",
   );
+  const nvencReady =
+    !probe?.isPlaylist &&
+    nvidiaAcceleration?.status === "available" &&
+    nvidiaAcceleration.encoders.some((encoder) => encoder.available);
+  const selectedNvenc = options.videoConversion
+    ? nvidiaAcceleration?.encoders.find(
+        (encoder) => encoder.codec === options.videoConversion?.codec,
+      )
+    : undefined;
 
   const availableHeights = useMemo(
     () =>
@@ -171,6 +185,7 @@ export function DownloadView() {
       destination,
       filenameTemplate:
         settings?.filenameTemplate ?? "%(title).200B [%(id)s].%(ext)s",
+      isPlaylist: probe.isPlaylist,
       options,
     };
     try {
@@ -375,50 +390,211 @@ export function DownloadView() {
             </div>
             <SegmentedMode
               value={options.mode}
-              onChange={(mode) => setOptions({ ...options, mode })}
+              onChange={(mode) =>
+                setOptions({
+                  ...options,
+                  mode,
+                  videoConversion:
+                    mode === "video" ? options.videoConversion : undefined,
+                })
+              }
             />
 
             {options.mode === "video" && (
-              <div
-                className="choice-grid"
-                role="radiogroup"
-                aria-label="Video quality"
-              >
-                {qualityOptions.map((quality) => {
-                  const unavailable =
-                    /^\d+$/.test(quality.value) &&
-                    availableHeights.size > 0 &&
-                    ![...availableHeights].some(
-                      (height) => Number(height) <= Number(quality.value),
+              <>
+                <div
+                  className="choice-grid"
+                  role="radiogroup"
+                  aria-label="Video quality"
+                >
+                  {qualityOptions.map((quality) => {
+                    const unavailable =
+                      /^\d+$/.test(quality.value) &&
+                      availableHeights.size > 0 &&
+                      ![...availableHeights].some(
+                        (height) => Number(height) <= Number(quality.value),
+                      );
+                    return (
+                      <label
+                        className={`choice-card ${options.quality === quality.value ? "choice-card--selected" : ""}`}
+                        key={quality.value}
+                      >
+                        <input
+                          type="radio"
+                          name="quality"
+                          value={quality.value}
+                          checked={options.quality === quality.value}
+                          onChange={() =>
+                            setOptions({ ...options, quality: quality.value })
+                          }
+                        />
+                        <span>
+                          <strong>{quality.label}</strong>
+                          <small>
+                            {unavailable
+                              ? "May use nearest available quality"
+                              : quality.value === "best" && !ffmpegReady
+                                ? "Best single file until FFmpeg is configured"
+                                : quality.note}
+                          </small>
+                        </span>
+                      </label>
                     );
-                  return (
-                    <label
-                      className={`choice-card ${options.quality === quality.value ? "choice-card--selected" : ""}`}
-                      key={quality.value}
-                    >
+                  })}
+                </div>
+
+                <section
+                  className={`gpu-conversion ${options.videoConversion ? "gpu-conversion--active" : ""}`}
+                  aria-labelledby="gpu-conversion-title"
+                >
+                  <div className="gpu-conversion__heading">
+                    <span className="gpu-conversion__icon">
+                      <Zap aria-hidden="true" />
+                    </span>
+                    <div>
+                      <div className="gpu-conversion__title-row">
+                        <h3 id="gpu-conversion-title">
+                          NVIDIA GPU conversion
+                        </h3>
+                        <span
+                          className={`capability-label capability-label--${nvencReady ? "ready" : "unavailable"}`}
+                        >
+                          {nvencReady ? "Ready" : "Unavailable"}
+                        </span>
+                      </div>
+                      <p>
+                        Re-encode the finished video with NVENC into a new MKV.
+                        This accelerates conversion, not the network download.
+                        The source is removed only after the MKV is finalized.
+                      </p>
+                    </div>
+                    <label className="switch-control">
                       <input
-                        type="radio"
-                        name="quality"
-                        value={quality.value}
-                        checked={options.quality === quality.value}
-                        onChange={() =>
-                          setOptions({ ...options, quality: quality.value })
+                        type="checkbox"
+                        aria-label="Convert video with NVIDIA NVENC"
+                        checked={Boolean(options.videoConversion)}
+                        disabled={!nvencReady}
+                        onChange={(event) =>
+                          setOptions({
+                            ...options,
+                            videoConversion: event.target.checked
+                              ? {
+                                  codec:
+                                    nvidiaAcceleration?.encoders.find(
+                                      (encoder) => encoder.available,
+                                    )?.codec ?? "h264",
+                                  quality: 23,
+                                  useCudaDecode: false,
+                                }
+                              : undefined,
+                          })
                         }
                       />
-                      <span>
-                        <strong>{quality.label}</strong>
-                        <small>
-                          {unavailable
-                            ? "May use nearest available quality"
-                            : quality.value === "best" && !ffmpegReady
-                              ? "Best single file until FFmpeg is configured"
-                              : quality.note}
-                        </small>
-                      </span>
+                      <span aria-hidden="true" />
                     </label>
-                  );
-                })}
-              </div>
+                  </div>
+
+                  {!nvencReady && (
+                    <p className="gpu-conversion__status">
+                      {probe.isPlaylist
+                        ? "GPU conversion is currently available for single-video jobs so every playlist item remains predictable."
+                        : nvidiaAcceleration?.message ??
+                          "Checking the bundled FFmpeg engine and NVIDIA driver…"}
+                    </p>
+                  )}
+
+                  {options.videoConversion && (
+                    <div className="gpu-conversion__controls">
+                      <label className="field">
+                        <span>Video codec</span>
+                        <select
+                          value={options.videoConversion.codec}
+                          onChange={(event) => {
+                            const codec = event.target.value as NvencCodec;
+                            setOptions({
+                              ...options,
+                              videoConversion: {
+                                ...options.videoConversion!,
+                                codec,
+                                quality: Math.min(
+                                  options.videoConversion!.quality,
+                                  codec === "av1" ? 63 : 51,
+                                ),
+                              },
+                            });
+                          }}
+                        >
+                          {nvidiaAcceleration?.encoders.map((encoder) => (
+                            <option
+                              key={encoder.codec}
+                              value={encoder.codec}
+                              disabled={!encoder.available}
+                            >
+                              {encoder.codec === "h264"
+                                ? "H.264 — most compatible"
+                                : encoder.codec === "hevc"
+                                  ? "HEVC — smaller files"
+                                  : "AV1 — newest GPUs"}{" "}
+                              {!encoder.available ? "(not supported)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>
+                          Quality: {options.videoConversion.quality}
+                        </span>
+                        <input
+                          type="range"
+                          min="1"
+                          max={
+                            options.videoConversion.codec === "av1" ? 63 : 51
+                          }
+                          value={options.videoConversion.quality}
+                          onChange={(event) =>
+                            setOptions({
+                              ...options,
+                              videoConversion: {
+                                ...options.videoConversion!,
+                                quality: Number(event.target.value),
+                              },
+                            })
+                          }
+                        />
+                        <small>Lower values preserve more detail.</small>
+                      </label>
+                      <label className="check-row gpu-decode-control">
+                        <input
+                          type="checkbox"
+                          checked={options.videoConversion.useCudaDecode}
+                          disabled={
+                            !nvidiaAcceleration?.cudaDecodeAvailable ||
+                            !selectedNvenc?.available
+                          }
+                          onChange={(event) =>
+                            setOptions({
+                              ...options,
+                              videoConversion: {
+                                ...options.videoConversion!,
+                                useCudaDecode: event.target.checked,
+                              },
+                            })
+                          }
+                        />
+                        <span>
+                          <strong>
+                            <Cpu aria-hidden="true" /> Decode on the GPU too
+                          </strong>
+                          <small>
+                            Optional. Software decoding is more compatible with
+                            unusual source codecs and profiles.
+                          </small>
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                </section>
+              </>
             )}
 
             {options.mode === "audio" && (

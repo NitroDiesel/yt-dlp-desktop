@@ -7,8 +7,9 @@ use std::{
 use tokio::process::Command;
 
 use crate::{
-    domain::{AppSettings, DependencyInfo, DependencyKind},
+    domain::{AppSettings, DependencyInfo, DependencyKind, NvidiaAccelerationInfo},
     error::AppResult,
+    integration::ffmpeg::inspect_nvidia_acceleration,
 };
 
 #[derive(Clone)]
@@ -78,6 +79,25 @@ impl DependencyManager {
 
     pub fn resolve_ffmpeg(&self, settings: &AppSettings) -> Option<PathBuf> {
         self.resolve(settings.ffmpeg_path.as_deref(), executable_name("ffmpeg"))
+    }
+
+    pub fn resolve_ffprobe(&self, settings: &AppSettings) -> Option<PathBuf> {
+        let custom = settings
+            .ffmpeg_path
+            .as_deref()
+            .and_then(|value| Path::new(value).parent())
+            .map(|path| path.join(executable_name("ffprobe")))
+            .filter(|path| path.is_file())
+            .map(|path| path.to_string_lossy().into_owned());
+        self.resolve(custom.as_deref(), executable_name("ffprobe"))
+    }
+
+    pub async fn inspect_nvidia_acceleration(
+        &self,
+        settings: &AppSettings,
+    ) -> NvidiaAccelerationInfo {
+        let ffmpeg = self.resolve_ffmpeg(settings);
+        inspect_nvidia_acceleration(ffmpeg.as_deref()).await
     }
 
     fn resolve(&self, custom: Option<&str>, name: &str) -> Option<PathBuf> {

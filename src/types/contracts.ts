@@ -1,4 +1,5 @@
 export type MediaMode = "video" | "audio" | "custom";
+export type NvencCodec = "h264" | "hevc" | "av1";
 export type JobStatus =
   | "queued"
   | "analyzing"
@@ -58,12 +59,18 @@ export interface DownloadOptions {
   playlistItems?: string;
   customFormat?: string;
   customArguments: string[];
+  videoConversion?: {
+    codec: NvencCodec;
+    quality: number;
+    useCudaDecode: boolean;
+  };
 }
 
 export interface DownloadRequest {
   url: string;
   destination: string;
   filenameTemplate: string;
+  isPlaylist: boolean;
   options: DownloadOptions;
 }
 
@@ -122,10 +129,32 @@ export interface DependencyInfo {
   message?: string;
 }
 
+export interface NvencEncoderInfo {
+  codec: NvencCodec;
+  encoder: string;
+  compiled: boolean;
+  available: boolean;
+  message?: string;
+}
+
+export interface NvidiaAccelerationInfo {
+  status:
+    | "available"
+    | "unsupported_platform"
+    | "build_missing"
+    | "driver_or_gpu_missing"
+    | "probe_failed";
+  cudaDecodeCompiled: boolean;
+  cudaDecodeAvailable: boolean;
+  encoders: NvencEncoderInfo[];
+  message: string;
+}
+
 export interface AppSnapshot {
   settings: AppSettings;
   queue: DownloadJob[];
   history: DownloadJob[];
   dependencies: DependencyInfo[];
+  nvidiaAcceleration: NvidiaAccelerationInfo;
   queuePaused: boolean;
 }

@@ -41,6 +41,33 @@ describe("DownloadView", () => {
       probe,
       isAnalyzing: false,
       analyzeError: undefined,
+      nvidiaAcceleration: {
+        status: "available",
+        cudaDecodeCompiled: true,
+        cudaDecodeAvailable: true,
+        message: "NVIDIA hardware acceleration is ready.",
+        encoders: [
+          {
+            codec: "h264",
+            encoder: "h264_nvenc",
+            compiled: true,
+            available: true,
+          },
+          {
+            codec: "hevc",
+            encoder: "hevc_nvenc",
+            compiled: true,
+            available: true,
+          },
+          {
+            codec: "av1",
+            encoder: "av1_nvenc",
+            compiled: true,
+            available: false,
+            message: "Unsupported GPU",
+          },
+        ],
+      },
       enqueue: vi.fn(),
       setView: vi.fn(),
     });
@@ -86,5 +113,22 @@ describe("DownloadView", () => {
 
     await user.click(screen.getByRole("button", { name: "Download now" }));
     expect(enqueue).toHaveBeenCalledOnce();
+  });
+
+  it("offers detected NVENC codecs as an explicit conversion step", async () => {
+    const user = userEvent.setup();
+    render(<DownloadView />);
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Convert video with NVIDIA NVENC",
+      }),
+    );
+
+    expect(screen.getByLabelText("Video codec")).toHaveValue("h264");
+    expect(
+      screen.getByRole("checkbox", { name: /Decode on the GPU too/ }),
+    ).toBeEnabled();
+    expect(screen.getByRole("option", { name: /AV1/ })).toBeDisabled();
   });
 });

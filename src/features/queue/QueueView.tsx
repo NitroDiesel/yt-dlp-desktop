@@ -22,7 +22,7 @@ export function QueueView() {
   const hasCompleted = queue.some((job) => job.status === "completed");
 
   return (
-    <div className="view">
+    <div className="view view--queue">
       <header className="view-header view-header--actions">
         <div>
           <p className="eyebrow">DOWNLOADS</p>
@@ -59,7 +59,7 @@ export function QueueView() {
       </header>
 
       {queuePaused && (
-        <div className="queue-notice">
+        <div className="queue-notice" role="status">
           <Pause aria-hidden="true" />
           <span>
             <strong>The queue is paused.</strong> Active downloads continue, but

@@ -15,7 +15,7 @@ import { hostname } from "../../lib/format";
 export function HistoryView() {
   const { history, retry, removeHistory, setView } = useAppStore();
   return (
-    <div className="view">
+    <div className="view view--history">
       <header className="view-header">
         <div>
           <p className="eyebrow">RECENT ACTIVITY</p>

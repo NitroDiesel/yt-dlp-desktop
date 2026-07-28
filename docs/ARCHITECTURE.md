@@ -17,8 +17,7 @@ Application service ───── Queue scheduler
           └── platform adapter └── sentinel/progress parser
                                   │
                                   ▼
-                           yt-dlp + Deno
-                           optional FFmpeg
+                      yt-dlp + Deno + FFmpeg
 ```
 
 ## Modules
@@ -26,6 +25,7 @@ Application service ───── Queue scheduler
 - `domain`: serialized contracts, job state machine, settings, dependency metadata, and error categories.
 - `application`: app startup, commands, persistent queue scheduling, recovery, and event emission.
 - `integration/yt_dlp`: typed argument construction, metadata probing, line protocol parsing, redaction, and the child-process lifecycle.
+- `integration/ffmpeg`: NVIDIA capability probes and the cancellation-safe, non-destructive NVENC conversion stage.
 - `integration/dependencies`: bundled/managed/custom/system executable discovery and version checks.
 - `persistence`: migrations and SQLite queries. Migration `0001_initial.sql` is applied from the first release.
 - `platform`: the narrow open/reveal adapter. It receives a persisted completed job ID, not an arbitrary path from the UI.
@@ -39,7 +39,8 @@ Application service ───── Queue scheduler
 4. The scheduler claims jobs up to the configured concurrency (1–4). Arguments are assembled as an array; conflicting expert flags are rejected.
 5. yt-dlp emits a machine-readable sentinel protocol. stdout/stderr are consumed concurrently to prevent pipe deadlocks. Structured progress is persisted and emitted to the UI.
 6. Cancellation first targets the whole process group/tree gracefully, then force-terminates it after a bounded wait.
-7. Output paths are accepted only from successful yt-dlp output, persisted, and used for open/reveal actions.
+7. Optional NVENC conversion writes a unique temporary MKV beside the source. The source is removed only after the GPU output is finalized; failures and cancellation preserve it.
+8. Output paths are accepted only from successful child-process output, persisted, and used for open/reveal actions.
 
 ## Persistence and recovery
 
@@ -60,6 +61,6 @@ Schema changes must be additive migrations. Released migrations are immutable. A
 
 ## Bundled-tools decision
 
-Official standalone yt-dlp and Deno executables are packaged as Tauri sidecars. That makes a fresh installer useful without asking the user to install developer tooling. FFmpeg remains optional in 0.1 because distributing it correctly requires platform-specific codec/license provenance and a larger signed supply chain. When FFmpeg is unavailable, the backend deliberately chooses a compatible single-file format and rejects features that require post-processing.
+Official standalone yt-dlp and Deno executables plus FFmpeg and FFprobe are packaged as Tauri sidecars. A fresh installation therefore supports best-stream merging and post-processing without asking the user to install developer tooling. Each target uses an immutable archive URL and SHA-256 digest; the packaged notices record the exact sources and build recipes. Custom/system paths remain optional overrides.
 
-The pinned component manifest is `packaging/components.json`; notices are shipped inside every app package.
+NVENC is a runtime capability, not a bundled driver. Windows/Linux builds include the NVIDIA codecs, but the app enables conversion only after a real encoder probe succeeds. CUDA decoding is separately tested and remains opt-in because source codec/profile support differs by GPU. The pinned component manifest is `packaging/components.json`; notices are shipped inside every app package.

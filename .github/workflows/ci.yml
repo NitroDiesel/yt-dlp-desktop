@@ -67,6 +67,13 @@ jobs:
       - name: Prepare Unix sidecars
         if: runner.os != 'Windows'
         run: ./scripts/prepare-sidecars.sh '${{ matrix.target }}'
+      - name: Verify Windows sidecars
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/verify-sidecars.ps1 -Target '${{ matrix.target }}'
+      - name: Verify Unix sidecars
+        if: runner.os != 'Windows'
+        run: bash ./scripts/verify-sidecars.sh '${{ matrix.target }}'
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --target '${{ matrix.target }}' --all-targets --all-features -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --target '${{ matrix.target }}' --all-targets --all-features
