@@ -11,7 +11,6 @@ import {
   ListPlus,
   Radio,
   Settings2,
-  Sparkles,
   Zap,
   X,
 } from "lucide-react";
@@ -201,15 +200,17 @@ export function DownloadView() {
   }
 
   return (
-    <div className="view view--download">
+    <div
+      className={`view view--download ${probe || isAnalyzing || analyzeError ? "view--download-active" : "view--download-idle"}`}
+    >
       <header className="view-header">
         <div>
           <p className="eyebrow">NEW DOWNLOAD</p>
-          <h1>Bring something home.</h1>
+          <h1>What should we download?</h1>
         </div>
         <p className="view-header__hint">
-          Paste a media link. You stay in control of quality, files, and
-          destination.
+          Paste a media link, inspect its formats, then choose exactly how it
+          should be saved.
         </p>
       </header>
 
@@ -257,8 +258,11 @@ export function DownloadView() {
               <button
                 className="button button--primary analyze-button"
                 disabled={!url.trim() || !ytDlpReady}
+                title="Analyze media"
+                aria-label="Analyze media"
               >
-                <Sparkles size={18} aria-hidden="true" /> Analyze
+                <ArrowRight size={18} aria-hidden="true" />
+                <span className="analyze-button__label">Analyze</span>
               </button>
             )}
           </div>

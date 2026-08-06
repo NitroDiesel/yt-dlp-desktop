@@ -14,8 +14,6 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@fontsource-variable/manrope": "^5.2.6",
-    "@fontsource/ibm-plex-mono": "^5.2.6",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-dialog": "^2.4.0",
     "@tauri-apps/plugin-opener": "^2.5.0",
