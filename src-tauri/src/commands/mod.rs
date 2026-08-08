@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use tauri::State;
 
 use crate::{
-    application::AppService,
+    application::{AppService, validate_downloaded_file},
     domain::{
         AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadRequest,
         HardwareAccelerationInfo, MediaProbe,
@@ -124,7 +124,9 @@ async fn validated_output(service: &Arc<AppService>, job_id: &str) -> AppResult<
             "Only completed downloads can be opened".into(),
         ));
     }
-    job.output_path
+    let output = job
+        .output_path
         .map(PathBuf::from)
-        .ok_or_else(|| AppError::Validation("This job has no recorded output file".into()))
+        .ok_or_else(|| AppError::Validation("This job has no recorded output file".into()))?;
+    validate_downloaded_file(&job.request.destination, &output).await
 }

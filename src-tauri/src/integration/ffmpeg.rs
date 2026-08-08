@@ -25,7 +25,7 @@ use crate::{
         VideoConversionOptions,
     },
     error::{AppError, AppResult},
-    integration::yt_dlp::RunnerEvent,
+    integration::yt_dlp::{RunnerEvent, redact},
 };
 
 #[cfg(not(target_os = "macos"))]
@@ -347,7 +347,13 @@ pub async fn run_hardware_conversion(
     cancel: CancellationToken,
     events: tokio::sync::mpsc::UnboundedSender<RunnerEvent>,
 ) -> AppResult<ConversionOutcome> {
-    let output_path = available_output_path(input, &encoder.provider)?;
+    let input = tokio::fs::canonicalize(input).await?;
+    if !tokio::fs::metadata(&input).await?.is_file() {
+        return Err(AppError::Validation(
+            "The downloaded source is not a regular file".into(),
+        ));
+    }
+    let output_path = available_output_path(&input, &encoder.provider)?;
     let temporary_path = output_path.with_file_name(format!(
         ".{}.{}.part.mkv",
         output_path
@@ -376,7 +382,7 @@ pub async fn run_hardware_conversion(
     }
     command
         .arg("-i")
-        .arg(input)
+        .arg(&input)
         .args(["-map", "0", "-c", "copy", "-c:v:0"])
         .arg(&encoder.encoder);
     let mut encoder_args = Vec::new();
@@ -418,7 +424,7 @@ pub async fn run_hardware_conversion(
     let stderr_task = tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let line: String = line.chars().take(1000).collect();
+            let line: String = redact(&line).chars().take(1000).collect();
             let mut guard = diagnostic_state.lock().await;
             if guard.len() >= 150 {
                 guard.remove(0);
@@ -459,14 +465,21 @@ pub async fn run_hardware_conversion(
         None => {
             let _ = tokio::fs::remove_file(&temporary_path).await;
             Ok(ConversionOutcome {
-                output_path: input.to_path_buf(),
+                output_path: input,
                 diagnostics: captured,
                 cancelled: true,
             })
         }
         Some(status) if status.success() => {
+            let current_input = tokio::fs::canonicalize(&input).await?;
+            if current_input != input || !tokio::fs::metadata(&current_input).await?.is_file() {
+                let _ = tokio::fs::remove_file(&temporary_path).await;
+                return Err(AppError::Validation(
+                    "The downloaded source changed while it was being converted".into(),
+                ));
+            }
             tokio::fs::rename(&temporary_path, &output_path).await?;
-            tokio::fs::remove_file(input).await?;
+            tokio::fs::remove_file(&input).await?;
             Ok(ConversionOutcome {
                 output_path,
                 diagnostics: captured,

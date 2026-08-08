@@ -33,7 +33,6 @@ pub struct MediaProbe {
     pub title: String,
     pub creator: Option<String>,
     pub duration_seconds: Option<f64>,
-    pub thumbnail_url: Option<String>,
     pub is_playlist: bool,
     pub playlist_count: Option<u32>,
     pub is_live: bool,

@@ -26,7 +26,7 @@ Application service ───── Queue scheduler
 - `application`: app startup, commands, persistent queue scheduling, recovery, and event emission.
 - `integration/yt_dlp`: typed argument construction, metadata probing, line protocol parsing, redaction, and the child-process lifecycle.
 - `integration/ffmpeg`: runtime NVENC/AMF capability probes and the cancellation-safe, non-destructive GPU conversion stage.
-- `integration/dependencies`: bundled/managed/custom/system executable discovery and version checks.
+- `integration/dependencies`: bundled and explicitly selected custom executable discovery and version checks.
 - `persistence`: migrations and SQLite queries. Migration `0001_initial.sql` is applied from the first release.
 - `platform`: the narrow open/reveal adapter. It receives a persisted completed job ID, not an arbitrary path from the UI.
 - `commands`: the only Tauri command surface exposed to the frontend.
@@ -55,12 +55,12 @@ Schema changes must be additive migrations. Released migrations are immutable. A
 - Proxy URLs containing embedded credentials are rejected so secrets are not stored as plaintext settings.
 - Cookie files are referenced by path; their contents are not copied into the database or diagnostics.
 - Diagnostics are bounded and redact URLs, query strings, authorization/cookie-like values, and local user-directory prefixes.
-- The content security policy allows only bundled UI resources, Tauri IPC, and remote media thumbnails.
+- The content security policy allows only bundled UI resources and Tauri IPC.
 - Bundled sidecars are pinned to exact versions and verified before packaging.
 - Deno is passed explicitly to yt-dlp as the JavaScript runtime; it is not exposed as a general-purpose UI command.
 
 ## Bundled-tools decision
 
-Official standalone yt-dlp and Deno executables plus FFmpeg and FFprobe are packaged as Tauri sidecars. A fresh installation therefore supports best-stream merging and post-processing without asking the user to install developer tooling. Each target uses an immutable archive URL and SHA-256 digest; the packaged notices record the exact sources and build recipes. Custom/system paths remain optional overrides.
+Official standalone yt-dlp and Deno executables plus FFmpeg and FFprobe are packaged as Tauri sidecars. A fresh installation therefore supports best-stream merging and post-processing without asking the user to install developer tooling. Each target uses an immutable archive URL and SHA-256 digest; the packaged notices record the exact sources and build recipes. Explicitly selected custom paths remain optional expert overrides; PATH executables are never run automatically.
 
 NVENC and AMF are runtime capabilities, not bundled drivers. The app first checks the codecs compiled into FFmpeg, then performs a real one-frame encode before showing an option. NVIDIA is preferred only when both vendors pass for the same codec; otherwise the working backend is selected automatically. GPU decoding is independently tested and remains opt-in because source codec/profile support differs by GPU. The pinned component manifest is `packaging/components.json`; notices are shipped inside every app package.

@@ -38,7 +38,6 @@ export interface MediaProbe {
   title: string;
   creator?: string;
   durationSeconds?: number;
-  thumbnailUrl?: string;
   isPlaylist: boolean;
   playlistCount?: number;
   isLive: boolean;

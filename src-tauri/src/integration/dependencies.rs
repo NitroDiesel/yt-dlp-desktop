@@ -1,29 +1,24 @@
 use std::{
-    collections::HashSet,
     path::{Path, PathBuf},
     process::Stdio,
+    time::Duration,
 };
 
 use tokio::process::Command;
 
 use crate::{
     domain::{AppSettings, DependencyInfo, DependencyKind, HardwareAccelerationInfo},
-    error::AppResult,
     integration::ffmpeg::inspect_hardware_acceleration,
 };
 
 #[derive(Clone)]
 pub struct DependencyManager {
-    managed_dir: PathBuf,
     bundled_dir: PathBuf,
 }
 
 impl DependencyManager {
-    pub fn new(managed_dir: PathBuf, bundled_dir: PathBuf) -> Self {
-        Self {
-            managed_dir,
-            bundled_dir,
-        }
+    pub fn new(bundled_dir: PathBuf) -> Self {
+        Self { bundled_dir }
     }
 
     pub async fn inspect_all(&self, settings: &AppSettings) -> Vec<DependencyInfo> {
@@ -108,26 +103,6 @@ impl DependencyManager {
         if bundled.is_file() {
             return Some(bundled);
         }
-        let managed = self.managed_dir.join("yt-dlp").join("current").join(name);
-        if managed.is_file() {
-            return Some(managed);
-        }
-        let cwd = std::env::current_dir().ok();
-        let mut visited = HashSet::new();
-        if let Some(paths) = std::env::var_os("PATH") {
-            for directory in std::env::split_paths(&paths) {
-                if directory.as_os_str().is_empty()
-                    || cwd.as_ref().is_some_and(|value| value == &directory)
-                    || !visited.insert(directory.clone())
-                {
-                    continue;
-                }
-                let candidate = directory.join(name);
-                if candidate.is_file() {
-                    return Some(candidate);
-                }
-            }
-        }
         None
     }
 
@@ -150,22 +125,22 @@ impl DependencyManager {
         };
         let source = if custom.is_some_and(|value| Path::new(value) == path) {
             "custom"
-        } else if path.starts_with(&self.bundled_dir) {
-            "bundled"
-        } else if path.starts_with(&self.managed_dir) {
-            "managed"
         } else {
-            "system"
+            "bundled"
         };
-        let output = Command::new(&path)
-            .args(args)
-            .stdin(Stdio::null())
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .output()
-            .await;
+        let output = tokio::time::timeout(
+            Duration::from_secs(5),
+            Command::new(&path)
+                .args(args)
+                .stdin(Stdio::null())
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .kill_on_drop(true)
+                .output(),
+        )
+        .await;
         match output {
-            Ok(output) if output.status.success() => {
+            Ok(Ok(output)) if output.status.success() => {
                 let raw = if output.stdout.is_empty() {
                     &output.stderr
                 } else {
@@ -186,7 +161,7 @@ impl DependencyManager {
                     message: None,
                 }
             }
-            Ok(output) => DependencyInfo {
+            Ok(Ok(output)) => DependencyInfo {
                 kind,
                 status: "invalid".into(),
                 source: source.into(),
@@ -194,13 +169,21 @@ impl DependencyManager {
                 version: None,
                 message: Some(format!("Version check exited with {}", output.status)),
             },
-            Err(error) => DependencyInfo {
+            Ok(Err(error)) => DependencyInfo {
                 kind,
                 status: "invalid".into(),
                 source: source.into(),
                 path: Some(path.to_string_lossy().into_owned()),
                 version: None,
                 message: Some(error.to_string()),
+            },
+            Err(_) => DependencyInfo {
+                kind,
+                status: "invalid".into(),
+                source: source.into(),
+                path: Some(path.to_string_lossy().into_owned()),
+                version: None,
+                message: Some("Version check timed out after 5 seconds".into()),
             },
         }
     }
@@ -218,10 +201,4 @@ fn executable_name(base: &str) -> &str {
     } else {
         base
     }
-}
-
-#[allow(dead_code)]
-pub async fn ensure_directory(path: &Path) -> AppResult<()> {
-    tokio::fs::create_dir_all(path).await?;
-    Ok(())
 }
