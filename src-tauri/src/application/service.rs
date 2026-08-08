@@ -45,15 +45,16 @@ impl AppService {
         let db = Database::connect(&data_dir.join("workspace.sqlite3")).await?;
         db.recover_interrupted().await?;
         let settings = db.settings().await?;
+        let executable = std::env::current_exe().map_err(|error| {
+            AppError::Process(format!("Cannot locate the app executable: {error}"))
+        })?;
+        let bundled_dir = executable
+            .parent()
+            .map(PathBuf::from)
+            .ok_or_else(|| AppError::Process("Cannot locate the bundled download engine".into()))?;
         Ok(Arc::new(Self {
             db,
-            dependencies: DependencyManager::new(
-                data_dir.join("components"),
-                std::env::current_exe()
-                    .ok()
-                    .and_then(|path| path.parent().map(PathBuf::from))
-                    .unwrap_or_default(),
-            ),
+            dependencies: DependencyManager::new(bundled_dir),
             settings: RwLock::new(settings),
             app,
             queue_paused: AtomicBool::new(false),
@@ -287,6 +288,33 @@ impl AppService {
             },
             None => Err(AppError::DependencyMissing("yt-dlp".into())),
         };
+        if let Ok(outcome) = &mut result
+            && !outcome.cancelled
+            && outcome.error.is_none()
+        {
+            let reported = outcome
+                .output_path
+                .as_deref()
+                .or(job.output_path.as_deref())
+                .map(PathBuf::from);
+            match reported {
+                Some(path) => match validate_downloaded_file(&job.request.destination, &path).await
+                {
+                    Ok(path) => {
+                        let path = path.to_string_lossy().into_owned();
+                        outcome.output_path = Some(path.clone());
+                        job.output_path = Some(path);
+                    }
+                    Err(error) => result = Err(error),
+                },
+                None => {
+                    result = Err(AppError::Validation(
+                        "yt-dlp did not report a downloaded file inside the selected destination"
+                            .into(),
+                    ));
+                }
+            }
+        }
         if let (Ok(outcome), Some(conversion)) =
             (&mut result, job.request.options.video_conversion.as_ref())
             && !outcome.cancelled
@@ -461,6 +489,25 @@ impl AppService {
     }
 }
 
+pub(crate) async fn validate_downloaded_file(
+    destination: &str,
+    output: &std::path::Path,
+) -> AppResult<PathBuf> {
+    let destination = tokio::fs::canonicalize(destination)
+        .await
+        .map_err(|_| AppError::Validation("The selected destination is unavailable".into()))?;
+    let output = tokio::fs::canonicalize(output)
+        .await
+        .map_err(|_| AppError::Validation("The downloaded file no longer exists".into()))?;
+    let metadata = tokio::fs::metadata(&output).await?;
+    if !metadata.is_file() || !output.starts_with(&destination) {
+        return Err(AppError::Validation(
+            "The download engine reported a file outside the selected destination".into(),
+        ));
+    }
+    Ok(output)
+}
+
 fn validate_video_conversion(conversion: &crate::domain::VideoConversionOptions) -> AppResult<()> {
     let maximum = 51;
     if !(1..=maximum).contains(&conversion.quality) {
@@ -489,9 +536,76 @@ fn validate_settings(settings: &AppSettings) -> AppResult<()> {
             "The filename template must be a filename, not a path".into(),
         ));
     }
+    if !PathBuf::from(&settings.download_directory).is_absolute() {
+        return Err(AppError::Validation(
+            "Choose an absolute download folder".into(),
+        ));
+    }
+    for (label, value) in [
+        ("yt-dlp", settings.yt_dlp_path.as_deref()),
+        ("FFmpeg", settings.ffmpeg_path.as_deref()),
+        ("Deno", settings.deno_path.as_deref()),
+    ] {
+        if let Some(value) = value.filter(|value| !value.is_empty()) {
+            let path = PathBuf::from(value);
+            if !path.is_absolute() || !path.is_file() {
+                return Err(AppError::Validation(format!(
+                    "Choose an existing {label} executable"
+                )));
+            }
+        }
+    }
+    if let Some(path) = settings
+        .cookie_file
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        let path = PathBuf::from(path);
+        if !path.is_absolute() || !path.is_file() {
+            return Err(AppError::Validation(
+                "Choose an existing Netscape-format cookie file".into(),
+            ));
+        }
+    }
+    if let Some(browser) = settings
+        .cookie_browser
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        && (browser.len() > 200
+            || !browser
+                .chars()
+                .all(|value| value.is_ascii_alphanumeric() || ".:_+-".contains(value)))
+    {
+        return Err(AppError::Validation(
+            "Enter a valid browser cookie source".into(),
+        ));
+    }
+    if settings.retries > 100 || settings.fragment_retries > 100 {
+        return Err(AppError::Validation(
+            "Retry counts must be between 0 and 100".into(),
+        ));
+    }
+    if let Some(limit) = settings
+        .rate_limit
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        && (limit.len() > 24
+            || !regex::Regex::new(r"(?i)^\d+(?:\.\d+)?(?:[kmgtp](?:i?b)?)?$")
+                .expect("static rate-limit pattern")
+                .is_match(limit))
+    {
+        return Err(AppError::Validation(
+            "Enter a rate limit such as 5M or 750K".into(),
+        ));
+    }
     if let Some(proxy) = settings.proxy.as_deref().filter(|value| !value.is_empty()) {
         let parsed = url::Url::parse(proxy)
             .map_err(|_| AppError::Validation("Enter a valid proxy URL".into()))?;
+        if !matches!(parsed.scheme(), "http" | "https" | "socks4" | "socks5") {
+            return Err(AppError::Validation(
+                "Use an HTTP, HTTPS, SOCKS4, or SOCKS5 proxy URL".into(),
+            ));
+        }
         if !parsed.username().is_empty() || parsed.password().is_some() {
             return Err(AppError::Validation(
                 "Proxy credentials are not stored by this release. Use a proxy URL without a username or password.".into(),
@@ -499,4 +613,40 @@ fn validate_settings(settings: &AppSettings) -> AppResult<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_downloaded_file;
+    use std::fs;
+
+    #[tokio::test]
+    async fn accepts_regular_files_inside_the_destination() {
+        let root = tempfile::tempdir().unwrap();
+        let destination = root.path().join("downloads");
+        fs::create_dir(&destination).unwrap();
+        let output = destination.join("video.mp4");
+        fs::write(&output, b"media").unwrap();
+
+        let validated = validate_downloaded_file(destination.to_str().unwrap(), &output)
+            .await
+            .unwrap();
+
+        assert_eq!(validated, output.canonicalize().unwrap());
+    }
+
+    #[tokio::test]
+    async fn rejects_files_outside_the_destination() {
+        let root = tempfile::tempdir().unwrap();
+        let destination = root.path().join("downloads");
+        fs::create_dir(&destination).unwrap();
+        let output = root.path().join("unrelated.txt");
+        fs::write(&output, b"private").unwrap();
+
+        assert!(
+            validate_downloaded_file(destination.to_str().unwrap(), &output)
+                .await
+                .is_err()
+        );
+    }
 }

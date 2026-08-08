@@ -45,12 +45,78 @@ const MANAGED_FLAGS: &[&str] = &[
     "--ppa",
 ];
 
+// These options escape the app's typed process and file boundaries. Keeping
+// ordinary yt-dlp flags available preserves expert flexibility without letting
+// a download request execute programs, load code/config, or redirect outputs.
+const UNSAFE_FLAGS: &[&str] = &[
+    "--alias",
+    "--exec",
+    "--exec-before-download",
+    "--plugin-dirs",
+    "--config-locations",
+    "--load-info-json",
+    "--downloader",
+    "--downloader-args",
+    "--external-downloader",
+    "--external-downloader-args",
+    "--use-postprocessor",
+    "--print-to-file",
+    "--download-archive",
+    "--batch-file",
+    "-a",
+    "--cache-dir",
+    "--netrc",
+    "-n",
+    "--netrc-location",
+    "--netrc-cmd",
+    "--write-pages",
+    "--load-pages",
+    "--remote-components",
+    "--update",
+    "--update-to",
+    "-U",
+    "--username",
+    "-u",
+    "--password",
+    "-p",
+    "--twofactor",
+    "-2",
+    "--video-password",
+    "--ap-mso",
+    "--ap-username",
+    "--ap-password",
+    "--client-certificate",
+    "--client-certificate-key",
+    "--client-certificate-password",
+    "--simulate",
+    "--skip-download",
+    "-O",
+];
+
+fn matches_flag(argument: &str, flag: &str) -> bool {
+    let name = argument.split_once('=').map_or(argument, |(name, _)| name);
+    if flag.starts_with("--") && name.starts_with("--") {
+        flag.starts_with(name)
+    } else {
+        name == flag
+            || (flag.starts_with('-')
+                && !flag.starts_with("--")
+                && name.starts_with(flag)
+                && name.len() > flag.len())
+    }
+}
+
 pub fn validate_request(request: &DownloadRequest) -> AppResult<()> {
     let url = Url::parse(&request.url)
         .map_err(|_| AppError::Validation("Enter a valid http or https media address".into()))?;
     if !matches!(url.scheme(), "http" | "https") {
         return Err(AppError::Validation(
             "Only http and https media addresses are supported".into(),
+        ));
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(AppError::Validation(
+            "Media addresses containing usernames or passwords are not supported".into(),
         ));
     }
     if !Path::new(&request.destination).is_absolute() {
@@ -91,14 +157,34 @@ pub fn validate_request(request: &DownloadRequest) -> AppResult<()> {
             )));
         }
     }
+    let custom_bytes = request
+        .options
+        .custom_arguments
+        .iter()
+        .map(String::len)
+        .sum::<usize>();
+    if custom_bytes > 64 * 1024 {
+        return Err(AppError::Validation(
+            "Expert arguments are too large".into(),
+        ));
+    }
     for argument in &request.options.custom_arguments {
-        if argument.contains('\0')
-            || MANAGED_FLAGS
-                .iter()
-                .any(|flag| argument == flag || argument.starts_with(&format!("{flag}=")))
+        if argument.contains('\0') || argument.len() > 4096 {
+            return Err(AppError::Validation(
+                "An expert argument is invalid or too large".into(),
+            ));
+        }
+        if MANAGED_FLAGS
+            .iter()
+            .any(|flag| matches_flag(argument, flag))
         {
             return Err(AppError::Validation(format!(
                 "Expert argument conflicts with a managed option: {argument}"
+            )));
+        }
+        if UNSAFE_FLAGS.iter().any(|flag| matches_flag(argument, flag)) {
+            return Err(AppError::Validation(format!(
+                "Expert argument is blocked because it can execute code or escape the selected destination: {argument}"
             )));
         }
     }
@@ -279,6 +365,43 @@ mod tests {
         let mut value = request();
         value.url = "file:///secret".into();
         assert!(build_download_args(&value, &AppSettings::default()).is_err());
+    }
+
+    #[test]
+    fn rejects_url_credentials() {
+        let mut value = request();
+        value.url = "https://user:secret@example.com/video".into();
+        assert!(build_download_args(&value, &AppSettings::default()).is_err());
+    }
+
+    #[test]
+    fn rejects_code_execution_and_config_flags() {
+        for flag in [
+            "--exec=calc.exe",
+            "--exe=calc.exe",
+            "--alias",
+            "--plugin-dirs=/tmp/plugin",
+            "--config-locations=custom.conf",
+            "--downloader=curl",
+            "--external-downloader=curl",
+            "--netrc-cmd=echo secret",
+            "--download-archive=/tmp/archive",
+            "-a/tmp/batch.txt",
+            "-uprivate",
+            "-psecret",
+            "-2123456",
+            "-n",
+            "--write-pages",
+            "--load-pages",
+            "--remote-components=ejs:github",
+            "--username=private",
+            "-U",
+            "-Otitle",
+        ] {
+            let mut value = request();
+            value.options.custom_arguments = vec![flag.into()];
+            assert!(build_download_args(&value, &AppSettings::default()).is_err());
+        }
     }
 
     #[test]

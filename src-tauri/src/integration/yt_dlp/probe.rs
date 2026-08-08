@@ -1,7 +1,11 @@
-use std::{path::Path, process::Stdio};
+use std::{path::Path, process::Stdio, sync::LazyLock};
 
 use serde_json::Value;
-use tokio::process::Command;
+use tokio::{
+    io::{AsyncRead, AsyncReadExt},
+    process::Command,
+    time::{Duration, sleep},
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -45,29 +49,64 @@ pub async fn probe(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     configure_process_group(&mut command);
-    let child = command
+    let mut child = command
         .spawn()
         .map_err(|error| AppError::Process(error.to_string()))?;
     let pid = child.id();
-    let output = tokio::select! {
-        output = child.wait_with_output() => output?,
-        _ = cancel.cancelled() => { if let Some(pid)=pid { terminate_tree(pid, false).await; } return Err(AppError::Process("Analysis cancelled".into())); }
+    let stdout = child.stdout.take().expect("piped probe stdout");
+    let stderr = child.stderr.take().expect("piped probe stderr");
+    let stdout_task = tokio::spawn(read_limited(stdout, 32 * 1024 * 1024));
+    let stderr_task = tokio::spawn(read_limited(stderr, 2 * 1024 * 1024));
+    let status = tokio::select! {
+        status = child.wait() => Ok(status?),
+        _ = cancel.cancelled() => {
+            if let Some(pid)=pid { terminate_tree(pid, false).await; }
+            let _ = child.wait().await;
+            Err("Analysis cancelled")
+        },
+        _ = sleep(Duration::from_secs(90)) => {
+            if let Some(pid)=pid { terminate_tree(pid, false).await; }
+            let _ = child.wait().await;
+            Err("Analysis timed out")
+        }
     };
-    if !output.status.success() {
-        let stderr = redact(&String::from_utf8_lossy(&output.stderr));
-        return Err(AppError::Process(classify_probe_error(&stderr)));
-    }
-    if output.stdout.len() > 32 * 1024 * 1024 {
+    let (stdout, stdout_truncated) = stdout_task
+        .await
+        .map_err(|error| AppError::Process(error.to_string()))??;
+    let (stderr, _) = stderr_task
+        .await
+        .map_err(|error| AppError::Process(error.to_string()))??;
+    let status = status.map_err(|message| AppError::Process(message.into()))?;
+    if stdout_truncated {
         return Err(AppError::Parse(
             "The collection metadata is too large to analyze safely".into(),
         ));
     }
-    let value: Value = serde_json::from_slice(&output.stdout)?;
-    Ok(from_json(
-        value,
-        url,
-        &String::from_utf8_lossy(&output.stderr),
-    ))
+    if !status.success() {
+        let stderr = redact(&String::from_utf8_lossy(&stderr));
+        return Err(AppError::Process(classify_probe_error(&stderr)));
+    }
+    let value: Value = serde_json::from_slice(&stdout)?;
+    Ok(from_json(value, url, &String::from_utf8_lossy(&stderr)))
+}
+
+async fn read_limited(
+    mut reader: impl AsyncRead + Unpin,
+    limit: usize,
+) -> std::io::Result<(Vec<u8>, bool)> {
+    let mut output = Vec::with_capacity(limit.min(8192));
+    let mut buffer = [0_u8; 8192];
+    let mut truncated = false;
+    loop {
+        let read = reader.read(&mut buffer).await?;
+        if read == 0 {
+            break;
+        }
+        let retained = read.min(limit.saturating_sub(output.len()));
+        output.extend_from_slice(&buffer[..retained]);
+        truncated |= retained < read;
+    }
+    Ok((output, truncated))
 }
 
 fn from_json(value: Value, input_url: &str, stderr: &str) -> MediaProbe {
@@ -118,7 +157,6 @@ fn from_json(value: Value, input_url: &str, stderr: &str) -> MediaProbe {
         title: text(&value, "title").unwrap_or_else(|| "Untitled media".into()),
         creator: text(&value, "uploader").or_else(|| text(&value, "channel")),
         duration_seconds: value.get("duration").and_then(Value::as_f64),
-        thumbnail_url: text(&value, "thumbnail"),
         is_playlist,
         playlist_count,
         is_live: value
@@ -173,11 +211,37 @@ fn classify_probe_error(stderr: &str) -> String {
     }
 }
 pub fn redact(value: &str) -> String {
-    let proxy = regex::Regex::new(r"(?i)(https?://)([^\s/@:]+):([^\s/@]+)@").unwrap();
-    let tokens = regex::Regex::new(r"(?i)(token|key|signature|auth|password)=([^&\s]+)").unwrap();
-    tokens
-        .replace_all(&proxy.replace_all(value, "$1[redacted]@"), "$1=[redacted]")
-        .into_owned()
+    static URL_CREDENTIALS: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?i)(https?://)([^\s/@:]+):([^\s/@]+)@").unwrap());
+    static QUERY_SECRETS: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r"(?i)\b(token|key|api[_-]?key|signature|sig|lsig|auth|password|passwd|secret|expires?|x-amz-[a-z-]+)=([^&\s]+)",
+        )
+        .unwrap()
+    });
+    static PRIVATE_HEADERS: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r"(?i)\b(authorization|proxy-authorization|cookie|set-cookie)\s*:\s*[^\r\n]+",
+        )
+        .unwrap()
+    });
+    static HOME_PATH: LazyLock<Option<regex::Regex>> = LazyLock::new(|| {
+        dirs::home_dir().and_then(|path| {
+            path.to_str().map(|path| {
+                let prefix = if cfg!(windows) { "(?i)" } else { "" };
+                regex::Regex::new(&format!("{prefix}{}", regex::escape(path))).unwrap()
+            })
+        })
+    });
+    let value = URL_CREDENTIALS.replace_all(value, "$1[redacted]@");
+    let value = QUERY_SECRETS.replace_all(&value, "$1=[redacted]");
+    let value = PRIVATE_HEADERS
+        .replace_all(&value, "$1: [redacted]")
+        .into_owned();
+    match HOME_PATH.as_ref() {
+        Some(pattern) => pattern.replace_all(&value, "[home]").into_owned(),
+        None => value,
+    }
 }
 
 #[cfg(windows)]
@@ -221,8 +285,14 @@ mod tests {
     use super::*;
     #[test]
     fn redacts_proxy_and_query_secrets() {
-        let value = redact("https://user:pass@proxy.test token=abc&x=1");
+        let value =
+            redact("https://user:pass@proxy.test token=abc&sig=private Authorization: Bearer 123");
         assert!(!value.contains("pass"));
         assert!(!value.contains("abc"));
+        assert!(!value.contains("private"));
+        assert!(!value.contains("Bearer"));
+        if let Some(home) = dirs::home_dir().and_then(|path| path.to_str().map(str::to_owned)) {
+            assert_eq!(redact(&format!("failed at {home}")), "failed at [home]");
+        }
     }
 }

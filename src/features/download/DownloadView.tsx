@@ -206,11 +206,11 @@ export function DownloadView() {
       <header className="view-header">
         <div>
           <p className="eyebrow">NEW DOWNLOAD</p>
-          <h1>What should we download?</h1>
+          <h1>Download media</h1>
         </div>
         <p className="view-header__hint">
-          Paste a media link, inspect its formats, then choose exactly how it
-          should be saved.
+          Add a video, playlist, or channel link. Review the available formats
+          before the download starts.
         </p>
       </header>
 
@@ -270,6 +270,41 @@ export function DownloadView() {
             The link is read by yt-dlp on this computer. It is not sent to this
             app’s servers.
           </p>
+          {!probe && !isAnalyzing && (
+            <div className="download-basics">
+              <div className="download-basics__group">
+                <span className="download-basics__label">Download type</span>
+                <SegmentedMode
+                  value={options.mode}
+                  onChange={(mode) =>
+                    setOptions({
+                      ...options,
+                      mode,
+                      videoConversion:
+                        mode === "video" ? options.videoConversion : undefined,
+                    })
+                  }
+                />
+              </div>
+              <div className="download-basics__group">
+                <span className="download-basics__label">Save to</span>
+                <button
+                  type="button"
+                  className="path-picker path-picker--compact"
+                  onClick={() => void chooseDestination()}
+                >
+                  <FolderOpen aria-hidden="true" />
+                  <span>
+                    <strong>{destination || "Select a folder"}</strong>
+                    <small>
+                      {settings?.filenameTemplate ??
+                        "%(title).200B [%(id)s].%(ext)s"}
+                    </small>
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
         </form>
       </section>
 
@@ -292,34 +327,6 @@ export function DownloadView() {
           >
             Open Settings <ArrowRight aria-hidden="true" />
           </button>
-        </section>
-      )}
-
-      {!probe && !isAnalyzing && !analyzeError && (
-        <section className="workflow-guide" aria-label="Download workflow">
-          <div>
-            <span>1</span>
-            <p>
-              <strong>Analyze the link</strong>
-              <small>Read media details without downloading.</small>
-            </p>
-          </div>
-          <ArrowRight aria-hidden="true" />
-          <div>
-            <span>2</span>
-            <p>
-              <strong>Choose the file</strong>
-              <small>Set quality, audio, and subtitles.</small>
-            </p>
-          </div>
-          <ArrowRight aria-hidden="true" />
-          <div>
-            <span>3</span>
-            <p>
-              <strong>Bring it home</strong>
-              <small>Follow progress in the persistent queue.</small>
-            </p>
-          </div>
         </section>
       )}
 
@@ -351,11 +358,7 @@ export function DownloadView() {
         <div className="download-workflow">
           <section className="media-card" aria-labelledby="media-title">
             <div className="media-card__thumb">
-              {probe.thumbnailUrl ? (
-                <img src={probe.thumbnailUrl} alt="" />
-              ) : (
-                <Radio aria-hidden="true" />
-              )}
+              <Radio aria-hidden="true" />
               {probe.durationSeconds && (
                 <span>{formatDuration(probe.durationSeconds)}</span>
               )}
@@ -814,8 +817,8 @@ export function DownloadView() {
                       }
                     />
                     <small>
-                      Arguments that conflict with managed settings are
-                      rejected.
+                      Managed settings and arguments that execute programs,
+                      load plugins, or redirect output are rejected.
                     </small>
                   </label>
                 </fieldset>
