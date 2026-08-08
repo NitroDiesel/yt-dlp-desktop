@@ -132,13 +132,18 @@ jobs:
       - name: Generate Windows checksums
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -File -Include *.exe,*.msi | ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant(), $_.Name } | Set-Content -Encoding ascii "SHA256SUMS-${{ matrix.target }}.txt"
+        run: |
+          Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -File -Include *.exe,*.msi | ForEach-Object {
+            $name = $_.Name -replace ' ', '.'
+            "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant(), $name
+          } | Set-Content -Encoding ascii "SHA256SUMS-${{ matrix.target }}.txt"
       - name: Generate Unix checksums
         if: runner.os != 'Windows'
         shell: bash
         run: |
           while IFS= read -r -d '' file; do
-            printf '%s  %s\n' "$(shasum -a 256 "$file" | awk '{print $1}')" "$(basename "$file")"
+            name="$(basename "$file" | tr ' ' '.')"
+            printf '%s  %s\n' "$(shasum -a 256 "$file" | awk '{print $1}')" "$name"
           done < <(find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) -print0) > "SHA256SUMS-${{ matrix.target }}.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
