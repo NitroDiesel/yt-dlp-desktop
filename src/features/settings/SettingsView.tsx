@@ -9,18 +9,14 @@ import {
   RefreshCw,
   Save,
   ShieldCheck,
+  SlidersHorizontal,
+  Undo2,
   Zap,
 } from "lucide-react";
 import { useAppStore } from "../../app/store";
 import type { AppSettings, DependencyInfo } from "../../types/contracts";
 
-function DependencyCard({
-  dependency,
-  onChoose,
-}: {
-  dependency: DependencyInfo;
-  onChoose?: () => void;
-}) {
+function DependencyCard({ dependency }: { dependency: DependencyInfo }) {
   const ready = dependency.status === "available";
   const labels: Record<DependencyInfo["kind"], string> = {
     yt_dlp: "yt-dlp",
@@ -53,6 +49,9 @@ function DependencyCard({
             ? dependency.version || "Available"
             : dependency.message || "Not found"}
         </p>
+        {ready && dependency.message && (
+          <span className="dependency-card__note">{dependency.message}</span>
+        )}
         <small>
           {dependency.path ||
             (dependency.kind === "javascript_runtime"
@@ -60,11 +59,6 @@ function DependencyCard({
               : "The packaged executable could not be found")}
         </small>
       </div>
-      {onChoose && (
-        <button className="button button--quiet" onClick={onChoose}>
-          Choose
-        </button>
-      )}
     </article>
   );
 }
@@ -112,6 +106,13 @@ export function SettingsView() {
     if (kind === "yt_dlp") set("ytDlpPath", value);
     if (kind === "ffmpeg" || kind === "ffprobe") set("ffmpegPath", value);
     if (kind === "javascript_runtime") set("denoPath", value);
+  }
+
+  function resetToBundledExecutable(kind: DependencyInfo["kind"]) {
+    if (kind === "yt_dlp") set("ytDlpPath", undefined);
+    if (kind === "ffmpeg" || kind === "ffprobe")
+      set("ffmpegPath", undefined);
+    if (kind === "javascript_runtime") set("denoPath", undefined);
   }
 
   async function chooseCookieFile() {
@@ -261,18 +262,15 @@ export function SettingsView() {
             <RefreshCw aria-hidden="true" /> Check again
           </button>
         </div>
-        <div className="settings-panel dependency-list">
-          {dependencies.map((dependency) => (
-            <DependencyCard
-              key={dependency.kind}
-              dependency={dependency}
-              onChoose={
-                dependency.kind === "ffprobe"
-                  ? undefined
-                  : () => void chooseExecutable(dependency.kind)
-              }
-            />
-          ))}
+        <div className="settings-panel engine-panel">
+          <div className="dependency-list">
+            {dependencies.map((dependency) => (
+              <DependencyCard
+                key={dependency.kind}
+                dependency={dependency}
+              />
+            ))}
+          </div>
           <div className="legal-note">
             <ShieldCheck aria-hidden="true" />
             <p>
@@ -284,6 +282,70 @@ export function SettingsView() {
               needs no separate tools.
             </p>
           </div>
+          <details className="engine-overrides">
+            <summary>
+              <SlidersHorizontal aria-hidden="true" />
+              <span>
+                <strong>Custom tool overrides</strong>
+                <small>Optional controls for advanced installations</small>
+              </span>
+            </summary>
+            <div className="engine-overrides__body">
+              {(
+                [
+                  {
+                    kind: "yt_dlp" as const,
+                    label: "yt-dlp",
+                    path: draft.ytDlpPath,
+                  },
+                  {
+                    kind: "ffmpeg" as const,
+                    label: "FFmpeg and FFprobe",
+                    path: draft.ffmpegPath,
+                  },
+                  {
+                    kind: "javascript_runtime" as const,
+                    label: "JavaScript runtime",
+                    path: draft.denoPath,
+                  },
+                ] satisfies Array<{
+                  kind: DependencyInfo["kind"];
+                  label: string;
+                  path?: string;
+                }>
+              ).map((override) => (
+                <div className="engine-override-row" key={override.kind}>
+                  <span>
+                    <strong>{override.label}</strong>
+                    <small>{override.path || "Using the bundled tool"}</small>
+                  </span>
+                  <div>
+                    {override.path && (
+                      <button
+                        type="button"
+                        className="button button--quiet"
+                        onClick={() => resetToBundledExecutable(override.kind)}
+                      >
+                        <Undo2 aria-hidden="true" /> Use bundled
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void chooseExecutable(override.kind)}
+                    >
+                      Select replacement
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <p className="engine-overrides__help">
+                Replacements execute with the same access as the app. Only use
+                files you trust. FFprobe is selected from the same folder as
+                FFmpeg.
+              </p>
+            </div>
+          </details>
         </div>
       </section>
 

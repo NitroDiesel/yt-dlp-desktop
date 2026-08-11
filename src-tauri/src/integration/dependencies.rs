@@ -11,6 +11,8 @@ use crate::{
     integration::ffmpeg::inspect_hardware_acceleration,
 };
 
+const VERSION_CHECK_TIMEOUT: Duration = Duration::from_secs(15);
+
 #[derive(Clone)]
 pub struct DependencyManager {
     bundled_dir: PathBuf,
@@ -129,7 +131,7 @@ impl DependencyManager {
             "bundled"
         };
         let output = tokio::time::timeout(
-            Duration::from_secs(5),
+            VERSION_CHECK_TIMEOUT,
             Command::new(&path)
                 .args(args)
                 .stdin(Stdio::null())
@@ -177,15 +179,27 @@ impl DependencyManager {
                 version: None,
                 message: Some(error.to_string()),
             },
-            Err(_) => DependencyInfo {
-                kind,
-                status: "invalid".into(),
-                source: source.into(),
-                path: Some(path.to_string_lossy().into_owned()),
-                version: None,
-                message: Some("Version check timed out after 5 seconds".into()),
-            },
+            Err(_) => timeout_dependency_info(kind, source, &path),
         }
+    }
+}
+
+fn timeout_dependency_info(kind: DependencyKind, source: &str, path: &Path) -> DependencyInfo {
+    let bundled = source == "bundled";
+    DependencyInfo {
+        kind,
+        status: if bundled { "available" } else { "invalid" }.into(),
+        source: source.into(),
+        path: Some(path.to_string_lossy().into_owned()),
+        version: None,
+        message: Some(if bundled {
+            "The bundled tool is ready. Its version response took longer than expected.".into()
+        } else {
+            format!(
+                "Version check timed out after {} seconds",
+                VERSION_CHECK_TIMEOUT.as_secs()
+            )
+        }),
     }
 }
 
@@ -200,5 +214,31 @@ fn executable_name(base: &str) -> &str {
         }
     } else {
         base
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_tool_remains_available_when_version_check_is_slow() {
+        let info =
+            timeout_dependency_info(DependencyKind::YtDlp, "bundled", Path::new("yt-dlp.exe"));
+
+        assert_eq!(info.status, "available");
+        assert!(info.message.unwrap().contains("ready"));
+    }
+
+    #[test]
+    fn custom_tool_must_answer_the_version_check() {
+        let info = timeout_dependency_info(
+            DependencyKind::YtDlp,
+            "custom",
+            Path::new("custom-yt-dlp.exe"),
+        );
+
+        assert_eq!(info.status, "invalid");
+        assert!(info.message.unwrap().contains("15 seconds"));
     }
 }

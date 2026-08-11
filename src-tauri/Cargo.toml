@@ -1,6 +1,6 @@
 [package]
 name = "yt-dlp-desktop"
-version = "0.1.1"
+version = "0.1.2"
 description = "A task-focused desktop interface for yt-dlp"
 authors = ["yt-dlp Desktop contributors"]
 license = "GPL-3.0-or-later"
