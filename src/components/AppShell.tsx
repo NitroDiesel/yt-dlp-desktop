@@ -14,13 +14,13 @@ const navigation: Array<{
   label: string;
   icon: typeof Download;
 }> = [
-  { view: "queue", label: "Queue", icon: ListVideo },
+  { view: "queue", label: "Downloads", icon: ListVideo },
   { view: "history", label: "History", icon: History },
 ];
 
 const viewLabels: Record<ViewName, string> = {
   download: "New download",
-  queue: "Queue",
+  queue: "Downloads",
   history: "History",
   settings: "Settings",
 };
@@ -59,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </button>
 
         <div className="sidebar-section-heading">
-          <span>Downloads</span>
+          <span>Library</span>
         </div>
 
         <nav className="primary-nav" aria-label="Main navigation">

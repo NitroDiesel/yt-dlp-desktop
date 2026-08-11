@@ -54,7 +54,7 @@ function mergeJob(items: DownloadJob[], job: DownloadJob): DownloadJob[] {
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  activeView: "download",
+  activeView: "queue",
   initialized: false,
   dependencies: [],
   queue: [],

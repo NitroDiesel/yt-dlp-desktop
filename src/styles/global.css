@@ -2969,3 +2969,233 @@ h3 {
     min-width: 108px;
   }
 }
+
+/* Motrix-inspired downloader layout -----------------------------------------
+   The visual skin stays T3-like; the information architecture follows a
+   conventional download manager: library first, add-task form second. */
+.view--queue,
+.view--history {
+  max-width: none;
+}
+
+.view--queue {
+  min-height: calc(100vh - var(--topbar-height) - 98px);
+  display: flex;
+  flex-direction: column;
+}
+
+.view--queue .job-list,
+.view--queue .empty-state {
+  flex: 1;
+}
+
+.view--download .view-header {
+  align-items: center;
+}
+
+.view--download .view-header > div > p:not(.eyebrow) {
+  margin-top: 6px;
+}
+
+.download-workflow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 286px;
+  align-items: start;
+  gap: 12px;
+}
+
+.download-workflow > .media-card,
+.download-workflow > .inline-message {
+  grid-column: 1 / -1;
+}
+
+.configure-card {
+  grid-column: 1;
+}
+
+.download-summary {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+}
+
+.download-summary .destination-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.download-summary .destination-card h2 {
+  margin: 0;
+}
+
+.download-summary .download-actions {
+  flex-direction: column;
+}
+
+.download-summary .download-actions .button {
+  width: 100%;
+}
+
+.download-summary .download-actions .button--primary {
+  order: -1;
+}
+
+.engine-panel {
+  gap: 12px;
+}
+
+.engine-panel .dependency-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.engine-panel .dependency-card {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.dependency-card__note {
+  display: block;
+  margin-top: 3px;
+  color: var(--signal);
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.engine-overrides {
+  border-top: 1px solid var(--line);
+}
+
+.engine-overrides summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 2px 0;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.engine-overrides summary::-webkit-details-marker {
+  display: none;
+}
+
+.engine-overrides summary > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.engine-overrides summary > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.engine-overrides summary strong {
+  color: var(--ink);
+  font-size: 0.72rem;
+}
+
+.engine-overrides summary small {
+  margin-top: 2px;
+  color: var(--faint);
+  font-size: 0.62rem;
+}
+
+.engine-overrides__body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.engine-override-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.engine-override-row > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.engine-override-row > span strong {
+  font-size: 0.7rem;
+}
+
+.engine-override-row > span small {
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--faint);
+  font: 400 0.58rem/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engine-override-row > div {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 5px;
+}
+
+.engine-overrides__help {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 980px) {
+  .download-workflow {
+    grid-template-columns: 1fr;
+  }
+
+  .download-workflow > .media-card,
+  .download-workflow > .inline-message,
+  .configure-card,
+  .download-summary {
+    grid-column: 1;
+  }
+
+  .download-summary {
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  .view-header,
+  .view-header--actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .button {
+    flex: 1;
+  }
+
+  .engine-override-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .engine-override-row > div {
+    flex-wrap: wrap;
+  }
+}

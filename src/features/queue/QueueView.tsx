@@ -1,4 +1,4 @@
-import { Download, ListVideo, Pause, Play, Trash2 } from "lucide-react";
+import { Download, ListVideo, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { useAppStore } from "../../app/store";
 import { EmptyState } from "../../components/EmptyState";
 import { JobCard } from "./JobCard";
@@ -25,8 +25,8 @@ export function QueueView() {
     <div className="view view--queue">
       <header className="view-header view-header--actions">
         <div>
-          <p className="eyebrow">DOWNLOADS</p>
-          <h1>Queue</h1>
+          <p className="eyebrow">DOWNLOAD MANAGER</p>
+          <h1>Downloads</h1>
           <p>
             {activeCount > 0
               ? `${activeCount} active · ${queuedCount} waiting`
@@ -36,6 +36,12 @@ export function QueueView() {
           </p>
         </div>
         <div className="header-actions">
+          <button
+            className="button button--primary"
+            onClick={() => setView("download")}
+          >
+            <Plus aria-hidden="true" /> New download
+          </button>
           {hasCompleted && (
             <button
               className="button button--quiet"
@@ -77,12 +83,12 @@ export function QueueView() {
               className="button button--primary"
               onClick={() => setView("download")}
             >
-              <Download aria-hidden="true" /> Start a download
+              <Download aria-hidden="true" /> New download
             </button>
           }
         >
-          Analyzed links and active downloads will appear here with progress,
-          speed, and time remaining.
+          Add a link to begin. Active and waiting downloads will appear here
+          with progress, speed, and time remaining.
         </EmptyState>
       ) : (
         <section className="job-list" aria-label="Download queue">

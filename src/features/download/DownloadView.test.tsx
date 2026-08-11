@@ -107,6 +107,40 @@ describe("DownloadView", () => {
     expect(screen.getByText("Expert arguments")).toBeVisible();
   });
 
+  it("allows analysis when a bundled engine is ready but its version probe was slow", async () => {
+    const user = userEvent.setup();
+    const analyze = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({
+      probe: undefined,
+      dependencies: [
+        {
+          kind: "yt_dlp",
+          status: "available",
+          source: "bundled",
+          path: "C:\\Program Files\\yt-dlp Desktop\\yt-dlp.exe",
+          message:
+            "The bundled tool is ready. Its version response took longer than expected.",
+        },
+      ],
+      analyze,
+    });
+    render(<DownloadView />);
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: "Video, playlist, or channel link",
+      }),
+      "https://example.com/watch/slow-engine",
+    );
+    const analyzeButton = screen.getByRole("button", { name: "Analyze media" });
+    expect(analyzeButton).toBeEnabled();
+
+    await user.click(analyzeButton);
+    expect(analyze).toHaveBeenCalledWith(
+      "https://example.com/watch/slow-engine",
+    );
+  });
+
   it("requires confirmation before enqueueing a full playlist", async () => {
     const user = userEvent.setup();
     const enqueue = vi.fn().mockResolvedValue(undefined);

@@ -205,13 +205,17 @@ export function DownloadView() {
     >
       <header className="view-header">
         <div>
-          <p className="eyebrow">NEW DOWNLOAD</p>
-          <h1>Download media</h1>
+          <p className="eyebrow">ADD TASK</p>
+          <h1>New download</h1>
+          <p>Paste a supported media link and choose how to save it.</p>
         </div>
-        <p className="view-header__hint">
-          Add a video, playlist, or channel link. Review the available formats
-          before the download starts.
-        </p>
+        <button
+          type="button"
+          className="button button--quiet"
+          onClick={() => setView("queue")}
+        >
+          <X aria-hidden="true" /> Close
+        </button>
       </header>
 
       <section className="url-stage" aria-labelledby="url-heading">
@@ -223,7 +227,7 @@ export function DownloadView() {
           onSubmit={(event) => void handleAnalyze(event)}
         >
           <label id="url-heading" htmlFor="media-url">
-            Media address
+            Video, playlist, or channel link
           </label>
           <div className="url-input-wrap">
             <input
@@ -267,8 +271,7 @@ export function DownloadView() {
             )}
           </div>
           <p id="url-help" className="field-help">
-            The link is read by yt-dlp on this computer. It is not sent to this
-            app’s servers.
+            The link is processed locally by the bundled yt-dlp engine.
           </p>
           {!probe && !isAnalyzing && (
             <div className="download-basics">
@@ -314,11 +317,11 @@ export function DownloadView() {
             <Settings2 aria-hidden="true" />
           </span>
           <div>
-            <p className="step-label">ONE-TIME SETUP</p>
-            <h2 id="setup-title">Connect the download engine</h2>
+            <p className="step-label">ENGINE UNAVAILABLE</p>
+            <h2 id="setup-title">The bundled downloader could not start</h2>
             <p>
-              Choose yt-dlp in Settings before analyzing a link. The exact
-              executable and version will always stay visible.
+              Reinstall the app to restore its included tools, or select a
+              trusted replacement in advanced Settings.
             </p>
           </div>
           <button
@@ -826,54 +829,59 @@ export function DownloadView() {
             )}
           </section>
 
-          <section
-            className="destination-card"
-            aria-labelledby="destination-title"
-          >
-            <div>
-              <p className="step-label">SAVE TO</p>
-              <h2 id="destination-title">Choose a destination</h2>
-            </div>
-            <button
-              type="button"
-              className="path-picker"
-              onClick={() => void chooseDestination()}
+          <aside className="download-summary" aria-label="Download summary">
+            <section
+              className="destination-card"
+              aria-labelledby="destination-title"
             >
-              <FolderOpen aria-hidden="true" />
-              <span>
-                <strong>{destination || "Select a folder"}</strong>
-                <small>
-                  {settings?.filenameTemplate ??
-                    "%(title).200B [%(id)s].%(ext)s"}
-                </small>
-              </span>
-            </button>
-          </section>
+              <div>
+                <p className="step-label">SAVE TO</p>
+                <h2 id="destination-title">Destination</h2>
+              </div>
+              <button
+                type="button"
+                className="path-picker"
+                onClick={() => void chooseDestination()}
+              >
+                <FolderOpen aria-hidden="true" />
+                <span>
+                  <strong>{destination || "Select a folder"}</strong>
+                  <small>
+                    {settings?.filenameTemplate ??
+                      "%(title).200B [%(id)s].%(ext)s"}
+                  </small>
+                </span>
+              </button>
+            </section>
 
-          {submitError && (
-            <div className="inline-message inline-message--error" role="alert">
-              <AlertCircle aria-hidden="true" />
-              <p>{submitError}</p>
+            {submitError && (
+              <div
+                className="inline-message inline-message--error"
+                role="alert"
+              >
+                <AlertCircle aria-hidden="true" />
+                <p>{submitError}</p>
+              </div>
+            )}
+            <div className="download-actions">
+              <button
+                className="button button--secondary button--large"
+                disabled={!destination || Boolean(submitting)}
+                onClick={() => void submit(false)}
+              >
+                <ListPlus aria-hidden="true" />
+                {submitting === "queue" ? "Adding…" : "Add to queue"}
+              </button>
+              <button
+                className="button button--primary button--large"
+                disabled={!destination || Boolean(submitting)}
+                onClick={() => void submit(true)}
+              >
+                <Download aria-hidden="true" />
+                {submitting === "now" ? "Starting…" : "Download now"}
+              </button>
             </div>
-          )}
-          <div className="download-actions">
-            <button
-              className="button button--secondary button--large"
-              disabled={!destination || Boolean(submitting)}
-              onClick={() => void submit(false)}
-            >
-              <ListPlus aria-hidden="true" />
-              {submitting === "queue" ? "Adding…" : "Add to queue"}
-            </button>
-            <button
-              className="button button--primary button--large"
-              disabled={!destination || Boolean(submitting)}
-              onClick={() => void submit(true)}
-            >
-              <Download aria-hidden="true" />
-              {submitting === "now" ? "Starting…" : "Download now"}
-            </button>
-          </div>
+          </aside>
         </div>
       )}
     </div>
