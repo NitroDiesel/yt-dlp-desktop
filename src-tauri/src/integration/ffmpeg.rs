@@ -25,8 +25,14 @@ use crate::{
         VideoConversionOptions,
     },
     error::{AppError, AppResult},
-    integration::yt_dlp::{RunnerEvent, redact},
+    integration::{
+        process::{configure_grouped_background_process, terminate_process_tree},
+        yt_dlp::{RunnerEvent, redact},
+    },
 };
+
+#[cfg(not(target_os = "macos"))]
+use crate::integration::process::configure_background_process;
 
 #[cfg(not(target_os = "macos"))]
 use crate::domain::HardwareCodec;
@@ -315,6 +321,7 @@ async fn run_probe(executable: &Path, args: &[&str]) -> Result<Output, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    configure_background_process(&mut command);
     match timeout(PROBE_TIMEOUT, command.output()).await {
         Ok(Ok(output)) => Ok(output),
         Ok(Err(error)) => Err(format!("FFmpeg could not be started: {error}")),
@@ -403,7 +410,7 @@ pub async fn run_hardware_conversion(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    configure_process_group(&mut command);
+    configure_grouped_background_process(&mut command);
     let mut child = command
         .spawn()
         .map_err(|error| AppError::Process(error.to_string()))?;
@@ -449,10 +456,10 @@ pub async fn run_hardware_conversion(
     let status = tokio::select! {
         result = child.wait() => Some(result?),
         _ = cancel.cancelled() => {
-            terminate_tree(pid, true).await;
+            terminate_process_tree(pid, true).await;
             sleep(Duration::from_secs(2)).await;
             if child.try_wait()?.is_none() {
-                terminate_tree(pid, false).await;
+                terminate_process_tree(pid, false).await;
             }
             let _ = child.wait().await;
             None
@@ -523,51 +530,6 @@ fn available_output_path(input: &Path, provider: &HardwareEncoderProvider) -> Ap
     Err(AppError::Validation(
         "Could not choose a unique GPU-converted output filename".into(),
     ))
-}
-
-#[cfg(windows)]
-fn configure_process_group(command: &mut Command) {
-    command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP);
-}
-
-#[cfg(unix)]
-fn configure_process_group(command: &mut Command) {
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setpgid(0, 0) == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-}
-
-#[cfg(windows)]
-async fn terminate_tree(pid: u32, graceful: bool) {
-    let mut args = vec!["/PID".to_string(), pid.to_string(), "/T".into()];
-    if !graceful {
-        args.push("/F".into());
-    }
-    let _ = Command::new("taskkill.exe")
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await;
-}
-
-#[cfg(unix)]
-async fn terminate_tree(pid: u32, graceful: bool) {
-    unsafe {
-        libc::kill(
-            -(pid as i32),
-            if graceful {
-                libc::SIGINT
-            } else {
-                libc::SIGKILL
-            },
-        );
-    }
 }
 
 #[cfg(test)]

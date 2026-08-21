@@ -8,7 +8,7 @@ use tokio::process::Command;
 
 use crate::{
     domain::{AppSettings, DependencyInfo, DependencyKind, HardwareAccelerationInfo},
-    integration::ffmpeg::inspect_hardware_acceleration,
+    integration::{ffmpeg::inspect_hardware_acceleration, process::configure_background_process},
 };
 
 const VERSION_CHECK_TIMEOUT: Duration = Duration::from_secs(15);
@@ -130,17 +130,15 @@ impl DependencyManager {
         } else {
             "bundled"
         };
-        let output = tokio::time::timeout(
-            VERSION_CHECK_TIMEOUT,
-            Command::new(&path)
-                .args(args)
-                .stdin(Stdio::null())
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
-                .kill_on_drop(true)
-                .output(),
-        )
-        .await;
+        let mut command = Command::new(&path);
+        command
+            .args(args)
+            .stdin(Stdio::null())
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .kill_on_drop(true);
+        configure_background_process(&mut command);
+        let output = tokio::time::timeout(VERSION_CHECK_TIMEOUT, command.output()).await;
         match output {
             Ok(Ok(output)) if output.status.success() => {
                 let raw = if output.stdout.is_empty() {

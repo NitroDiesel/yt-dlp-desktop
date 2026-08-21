@@ -11,6 +11,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { StatusPill } from "../../components/StatusPill";
 import { appApi } from "../../lib/api";
 import { hostname } from "../../lib/format";
+import { formatTimecode } from "../../lib/timecode";
 
 export function HistoryView() {
   const { history, retry, removeHistory, setView } = useAppStore();
@@ -55,6 +56,16 @@ export function HistoryView() {
                   {job.request.options.mode === "audio"
                     ? `Audio · ${job.request.options.audioFormat.toUpperCase()}`
                     : "Video"}
+                  {job.request.options.clip && (
+                    <>
+                      {" · Clip "}
+                      {formatTimecode(job.request.options.clip.startSeconds)}–
+                      {formatTimecode(
+                        job.request.options.clip.startSeconds +
+                          job.request.options.clip.durationSeconds,
+                      )}
+                    </>
+                  )}
                 </span>
               </div>
               <StatusPill status={job.status} />

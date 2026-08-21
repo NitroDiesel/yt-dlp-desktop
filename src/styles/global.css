@@ -3199,3 +3199,351 @@ h3 {
     flex-wrap: wrap;
   }
 }
+
+/* Clip editor -------------------------------------------------------------- */
+.clip-editor {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.clip-editor__heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+}
+
+.clip-editor__icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.clip-editor--active .clip-editor__icon {
+  color: var(--brand);
+}
+
+.clip-editor__icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.clip-editor__heading h3 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.clip-editor__heading p,
+.clip-editor__status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.clip-editor__status {
+  margin: 9px 0 0 41px;
+}
+
+.clip-editor__body {
+  margin: 17px 0 0 41px;
+}
+
+.clip-timeline {
+  margin-bottom: 18px;
+}
+
+.clip-timeline__labels {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 9px;
+  color: var(--faint);
+  font: 500 10px/1.3 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.clip-timeline__labels strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.clip-timeline__labels span:last-child {
+  text-align: end;
+}
+
+.clip-timeline__track {
+  position: relative;
+  height: 26px;
+}
+
+.clip-timeline__track::before,
+.clip-timeline__selection {
+  position: absolute;
+  top: 11px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.clip-timeline__track::before {
+  content: "";
+  inset-inline: 0;
+  background: var(--line-strong);
+}
+
+.clip-timeline__selection {
+  background: var(--brand);
+}
+
+.clip-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.clip-range::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+
+.clip-range::-webkit-slider-thumb {
+  width: 15px;
+  height: 15px;
+  margin-top: -6px;
+  appearance: none;
+  border: 3px solid var(--panel-strong);
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+.clip-range::-moz-range-track {
+  height: 4px;
+  background: transparent;
+}
+
+.clip-range::-moz-range-thumb {
+  width: 9px;
+  height: 9px;
+  border: 3px solid var(--panel-strong);
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+.clip-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
+.clip-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
+.clip-time-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.clip-time-field input {
+  font: 550 12px/1.3 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.clip-time-field input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.clip-time-fields__arrow {
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+
+.clip-time-fields__arrow svg {
+  width: 14px;
+  height: 14px;
+}
+
+.clip-duration {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.clip-editor__error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.clip-precision {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.clip-precision legend {
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.clip-precision > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.clip-method {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.clip-method:hover {
+  color: var(--ink);
+}
+
+.clip-method--selected {
+  border-color: var(--line);
+  background: var(--panel-strong);
+  color: var(--ink);
+}
+
+.clip-method input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.clip-method:has(input:focus-visible) {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.clip-method > svg {
+  width: 15px;
+  height: 15px;
+  color: var(--faint);
+}
+
+.clip-method--selected > svg {
+  color: var(--brand);
+}
+
+.clip-method span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.clip-method strong {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.clip-method small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.clip-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-soft) 48%, var(--panel));
+}
+
+.clip-summary > svg {
+  width: 15px;
+  height: 15px;
+  color: var(--brand);
+}
+
+.clip-summary span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.clip-summary strong {
+  overflow: hidden;
+  font: 600 11px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clip-summary small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+@media (max-width: 620px) {
+  .clip-editor__body,
+  .clip-editor__status {
+    margin-inline-start: 0;
+  }
+
+  .clip-time-fields {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .clip-duration {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .clip-precision > div {
+    grid-template-columns: 1fr;
+  }
+}

@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     domain::{MediaFormat, MediaProbe, SubtitleTrack},
     error::{AppError, AppResult},
+    integration::process::{configure_grouped_background_process, terminate_process_tree},
 };
 
 pub async fn probe(
@@ -48,7 +49,7 @@ pub async fn probe(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    configure_process_group(&mut command);
+    configure_grouped_background_process(&mut command);
     let mut child = command
         .spawn()
         .map_err(|error| AppError::Process(error.to_string()))?;
@@ -60,12 +61,12 @@ pub async fn probe(
     let status = tokio::select! {
         status = child.wait() => Ok(status?),
         _ = cancel.cancelled() => {
-            if let Some(pid)=pid { terminate_tree(pid, false).await; }
+            if let Some(pid)=pid { terminate_process_tree(pid, false).await; }
             let _ = child.wait().await;
             Err("Analysis cancelled")
         },
         _ = sleep(Duration::from_secs(90)) => {
-            if let Some(pid)=pid { terminate_tree(pid, false).await; }
+            if let Some(pid)=pid { terminate_process_tree(pid, false).await; }
             let _ = child.wait().await;
             Err("Analysis timed out")
         }
@@ -241,42 +242,6 @@ pub fn redact(value: &str) -> String {
     match HOME_PATH.as_ref() {
         Some(pattern) => pattern.replace_all(&value, "[home]").into_owned(),
         None => value,
-    }
-}
-
-#[cfg(windows)]
-fn configure_process_group(command: &mut Command) {
-    command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP);
-}
-#[cfg(unix)]
-fn configure_process_group(command: &mut Command) {
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setpgid(0, 0) == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-}
-#[cfg(windows)]
-async fn terminate_tree(pid: u32, _graceful: bool) {
-    let _ = Command::new("taskkill.exe")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .output()
-        .await;
-}
-#[cfg(unix)]
-async fn terminate_tree(pid: u32, graceful: bool) {
-    unsafe {
-        libc::kill(
-            -(pid as i32),
-            if graceful {
-                libc::SIGINT
-            } else {
-                libc::SIGKILL
-            },
-        );
     }
 }
 

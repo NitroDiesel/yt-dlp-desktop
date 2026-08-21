@@ -41,6 +41,9 @@ const MANAGED_FLAGS: &[&str] = &[
     "--js-runtimes",
     "--no-js-runtimes",
     "--recode-video",
+    "--download-sections",
+    "--force-keyframes-at-cuts",
+    "--no-force-keyframes-at-cuts",
     "--postprocessor-args",
     "--ppa",
 ];
@@ -157,6 +160,24 @@ pub fn validate_request(request: &DownloadRequest) -> AppResult<()> {
             )));
         }
     }
+    if let Some(clip) = request.options.clip.as_ref() {
+        let end_seconds = clip.start_seconds + clip.duration_seconds;
+        if !clip.start_seconds.is_finite()
+            || !clip.duration_seconds.is_finite()
+            || !end_seconds.is_finite()
+            || clip.start_seconds < 0.0
+            || clip.duration_seconds <= 0.0
+        {
+            return Err(AppError::Validation(
+                "Choose a valid clip with an end time after its start time".into(),
+            ));
+        }
+        if request.is_playlist {
+            return Err(AppError::Validation(
+                "Clip downloads are available for one video at a time".into(),
+            ));
+        }
+    }
     let custom_bytes = request
         .options
         .custom_arguments
@@ -260,6 +281,26 @@ pub fn build_download_args(
                 .into(),
         ]),
     }
+    if let Some(clip) = request.options.clip.as_ref() {
+        if settings.ffmpeg_path.is_none() {
+            return Err(AppError::DependencyMissing(
+                "FFmpeg is required to download a selected timeframe".into(),
+            ));
+        }
+        let end_seconds = clip.start_seconds + clip.duration_seconds;
+        args.extend([
+            "--download-sections".into(),
+            format!(
+                "*{}-{}",
+                format_timestamp(clip.start_seconds),
+                format_timestamp(end_seconds)
+            )
+            .into(),
+        ]);
+        if clip.precise {
+            args.push("--force-keyframes-at-cuts".into());
+        }
+    }
     if request.options.write_subtitles {
         args.push("--write-subs".into());
     }
@@ -315,6 +356,15 @@ pub fn build_download_args(
     Ok(args)
 }
 
+fn format_timestamp(seconds: f64) -> String {
+    let total_milliseconds = (seconds * 1000.0).round() as u64;
+    let hours = total_milliseconds / 3_600_000;
+    let minutes = (total_milliseconds % 3_600_000) / 60_000;
+    let seconds = (total_milliseconds % 60_000) / 1000;
+    let milliseconds = total_milliseconds % 1000;
+    format!("{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,6 +391,7 @@ mod tests {
                 playlist_items: None,
                 custom_format: None,
                 custom_arguments: vec![],
+                clip: None,
                 video_conversion: None,
             },
         }
@@ -354,6 +405,84 @@ mod tests {
         );
         assert_eq!(args.last().unwrap(), "https://example.com/watch?v=1");
     }
+
+    #[test]
+    fn builds_a_precise_typed_clip_range() {
+        let mut value = request();
+        value.options.clip = Some(crate::domain::ClipOptions {
+            start_seconds: 12.5,
+            duration_seconds: 18.25,
+            precise: true,
+        });
+        let settings = AppSettings {
+            ffmpeg_path: Some(if cfg!(windows) {
+                r"C:\ffmpeg.exe".into()
+            } else {
+                "/tmp/ffmpeg".into()
+            }),
+            ..AppSettings::default()
+        };
+
+        let args = build_download_args(&value, &settings).unwrap();
+        let args = args
+            .iter()
+            .map(|argument| argument.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert!(
+            args.windows(2)
+                .any(|pair| { pair == ["--download-sections", "*00:00:12.500-00:00:30.750"] })
+        );
+        assert!(
+            args.iter()
+                .any(|argument| argument == "--force-keyframes-at-cuts")
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_or_playlist_clip_ranges() {
+        let mut value = request();
+        value.options.clip = Some(crate::domain::ClipOptions {
+            start_seconds: 10.0,
+            duration_seconds: 0.0,
+            precise: false,
+        });
+        assert!(validate_request(&value).is_err());
+
+        value.options.clip = Some(crate::domain::ClipOptions {
+            start_seconds: 10.0,
+            duration_seconds: 5.0,
+            precise: false,
+        });
+        value.is_playlist = true;
+        assert!(validate_request(&value).is_err());
+    }
+
+    #[test]
+    fn requires_ffmpeg_for_clip_downloads() {
+        let mut value = request();
+        value.options.clip = Some(crate::domain::ClipOptions {
+            start_seconds: 5.0,
+            duration_seconds: 10.0,
+            precise: false,
+        });
+
+        assert!(build_download_args(&value, &AppSettings::default()).is_err());
+    }
+
+    #[test]
+    fn reserves_clip_flags_for_the_typed_feature() {
+        for flag in [
+            "--download-sections=*00:00:05-00:00:15",
+            "--force-keyframes-at-cuts",
+            "--no-force-keyframes-at-cuts",
+        ] {
+            let mut value = request();
+            value.options.custom_arguments = vec![flag.into()];
+            assert!(build_download_args(&value, &AppSettings::default()).is_err());
+        }
+    }
+
     #[test]
     fn rejects_managed_custom_flags() {
         let mut value = request();

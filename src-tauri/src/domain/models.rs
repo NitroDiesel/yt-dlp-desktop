@@ -105,6 +105,14 @@ pub struct VideoConversionOptions {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct ClipOptions {
+    pub start_seconds: f64,
+    pub duration_seconds: f64,
+    pub precise: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct DownloadOptions {
     pub mode: MediaMode,
     pub quality: String,
@@ -118,6 +126,8 @@ pub struct DownloadOptions {
     pub playlist_items: Option<String>,
     pub custom_format: Option<String>,
     pub custom_arguments: Vec<String>,
+    #[serde(default)]
+    pub clip: Option<ClipOptions>,
     #[serde(default)]
     pub video_conversion: Option<VideoConversionOptions>,
 }
@@ -346,6 +356,7 @@ mod tests {
             "customArguments": []
         });
         let options: DownloadOptions = serde_json::from_value(value).unwrap();
+        assert!(options.clip.is_none());
         assert!(options.video_conversion.is_none());
     }
 
@@ -372,6 +383,7 @@ mod tests {
         });
         let request: DownloadRequest = serde_json::from_value(value).unwrap();
         assert!(!request.is_playlist);
+        assert!(request.options.clip.is_none());
         assert!(request.options.video_conversion.is_none());
     }
 }

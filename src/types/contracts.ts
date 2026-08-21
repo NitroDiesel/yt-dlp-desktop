@@ -59,6 +59,11 @@ export interface DownloadOptions {
   playlistItems?: string;
   customFormat?: string;
   customArguments: string[];
+  clip?: {
+    startSeconds: number;
+    durationSeconds: number;
+    precise: boolean;
+  };
   videoConversion?: {
     codec: HardwareCodec;
     quality: number;

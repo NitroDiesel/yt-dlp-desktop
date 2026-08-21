@@ -10,18 +10,25 @@ import {
   FolderOpen,
   ListPlus,
   Radio,
+  Scissors,
   Settings2,
   Zap,
   X,
 } from "lucide-react";
 import { useAppStore } from "../../app/store";
 import { formatDuration, hostname } from "../../lib/format";
+import {
+  formatTimecode,
+  validateClipDraft,
+  type ClipDraft,
+} from "../../lib/timecode";
 import type {
   DownloadOptions,
   DownloadRequest,
   MediaMode,
   HardwareCodec,
 } from "../../types/contracts";
+import { ClipEditor } from "./ClipEditor";
 
 const qualityOptions = [
   {
@@ -108,6 +115,7 @@ export function DownloadView() {
     mode: settings?.defaultMode ?? "video",
     quality: settings?.defaultQuality ?? "best",
   });
+  const [clipDraft, setClipDraft] = useState<ClipDraft>();
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState<"now" | "queue">();
   const [submitError, setSubmitError] = useState<string>();
@@ -130,6 +138,24 @@ export function DownloadView() {
           encoder.available,
       )
     : undefined;
+  const clipDisabledReason = probe?.isPlaylist
+    ? "Clip downloads work with one video at a time. Use a single-video link."
+    : probe?.isLive
+      ? "Live streams cannot be trimmed before download."
+      : !ffmpegReady
+        ? "The bundled FFmpeg engine is required to cut a selected timeframe."
+        : undefined;
+  const clipValidation = useMemo(
+    () =>
+      clipDraft
+        ? validateClipDraft(clipDraft, probe?.durationSeconds)
+        : undefined,
+    [clipDraft, probe?.durationSeconds],
+  );
+  const clipBlocked = Boolean(
+    clipDraft &&
+      (clipDisabledReason || clipValidation?.kind === "invalid"),
+  );
 
   const availableHeights = useMemo(
     () =>
@@ -148,6 +174,7 @@ export function DownloadView() {
       const text = await navigator.clipboard.readText();
       setUrl(text.trim());
       clearProbe();
+      setClipDraft(undefined);
     } catch {
       setSubmitError(
         "Clipboard access is unavailable. Paste the link into the field instead.",
@@ -166,6 +193,14 @@ export function DownloadView() {
 
   async function submit(startImmediately: boolean) {
     if (!probe || !destination) return;
+    if (clipDraft && clipDisabledReason) {
+      setSubmitError(clipDisabledReason);
+      return;
+    }
+    if (clipValidation?.kind === "invalid") {
+      setSubmitError(clipValidation.message);
+      return;
+    }
     if (probe.isPlaylist && !options.playlistItems?.trim()) {
       const scope = probe.playlistCount
         ? `all ${probe.playlistCount} items`
@@ -187,7 +222,13 @@ export function DownloadView() {
       filenameTemplate:
         settings?.filenameTemplate ?? "%(title).200B [%(id)s].%(ext)s",
       isPlaylist: probe.isPlaylist,
-      options,
+      options: {
+        ...options,
+        clip:
+          clipValidation?.kind === "valid"
+            ? clipValidation.clip
+            : undefined,
+      },
     };
     try {
       await enqueue(request, startImmediately);
@@ -240,6 +281,7 @@ export function DownloadView() {
               onChange={(event) => {
                 setUrl(event.target.value);
                 clearProbe();
+                setClipDraft(undefined);
               }}
               required
             />
@@ -663,6 +705,13 @@ export function DownloadView() {
               </label>
             )}
 
+            <ClipEditor
+              value={clipDraft}
+              durationSeconds={probe.durationSeconds}
+              disabledReason={clipDisabledReason}
+              onChange={setClipDraft}
+            />
+
             <button
               type="button"
               className="disclosure-button"
@@ -854,6 +903,21 @@ export function DownloadView() {
               </button>
             </section>
 
+            {clipValidation?.kind === "valid" && (
+              <div className="clip-summary">
+                <Scissors aria-hidden="true" />
+                <span>
+                  <strong>
+                    {formatTimecode(clipValidation.startSeconds)} →{" "}
+                    {formatTimecode(clipValidation.endSeconds)}
+                  </strong>
+                  <small>
+                    {clipDraft?.precise ? "Accurate cut" : "Fast keyframe cut"}
+                  </small>
+                </span>
+              </div>
+            )}
+
             {submitError && (
               <div
                 className="inline-message inline-message--error"
@@ -866,7 +930,7 @@ export function DownloadView() {
             <div className="download-actions">
               <button
                 className="button button--secondary button--large"
-                disabled={!destination || Boolean(submitting)}
+                disabled={!destination || clipBlocked || Boolean(submitting)}
                 onClick={() => void submit(false)}
               >
                 <ListPlus aria-hidden="true" />
@@ -874,7 +938,7 @@ export function DownloadView() {
               </button>
               <button
                 className="button button--primary button--large"
-                disabled={!destination || Boolean(submitting)}
+                disabled={!destination || clipBlocked || Boolean(submitting)}
                 onClick={() => void submit(true)}
               >
                 <Download aria-hidden="true" />

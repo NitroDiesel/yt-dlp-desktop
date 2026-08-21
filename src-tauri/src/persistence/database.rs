@@ -237,6 +237,7 @@ mod tests {
                     playlist_items: None,
                     custom_format: None,
                     custom_arguments: vec![],
+                    clip: None,
                     video_conversion: None,
                 },
             },
