@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { appApi } from "../../lib/api";
 import { formatBytes, formatEta, hostname } from "../../lib/format";
+import { formatTimecode } from "../../lib/timecode";
 import type { DownloadJob } from "../../types/contracts";
 import { Diagnostics } from "../../components/Diagnostics";
 import { StatusPill } from "../../components/StatusPill";
@@ -86,6 +87,16 @@ export function JobCard({
             {job.request.options.mode === "audio"
               ? `Audio · ${job.request.options.audioFormat.toUpperCase()}`
               : `Video · ${job.request.options.quality === "best" ? "Best available" : job.request.options.quality + "p"}`}
+            {job.request.options.clip && (
+              <>
+                <span>·</span>
+                Clip {formatTimecode(job.request.options.clip.startSeconds)}–
+                {formatTimecode(
+                  job.request.options.clip.startSeconds +
+                    job.request.options.clip.durationSeconds,
+                )}
+              </>
+            )}
             <span>→</span>
             {job.request.destination}
           </p>

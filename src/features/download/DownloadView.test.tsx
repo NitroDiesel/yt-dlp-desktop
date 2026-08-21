@@ -39,6 +39,22 @@ describe("DownloadView", () => {
     useAppStore.setState({
       settings,
       probe,
+      dependencies: [
+        {
+          kind: "yt_dlp",
+          status: "available",
+          source: "bundled",
+          path: "C:\\Program Files\\yt-dlp Desktop\\yt-dlp.exe",
+          version: "2026.08.13",
+        },
+        {
+          kind: "ffmpeg",
+          status: "available",
+          source: "bundled",
+          path: "C:\\Program Files\\yt-dlp Desktop\\ffmpeg.exe",
+          version: "8.1",
+        },
+      ],
       isAnalyzing: false,
       analyzeError: undefined,
       hardwareAcceleration: {
@@ -179,6 +195,43 @@ describe("DownloadView", () => {
       screen.getByRole("checkbox", { name: /Decode on the GPU too/ }),
     ).toBeEnabled();
     expect(screen.getByRole("option", { name: /AV1/ })).toBeDisabled();
+  });
+
+  it("adds an accurate selected timeframe to the download request", async () => {
+    const user = userEvent.setup();
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({ enqueue });
+    render(<DownloadView />);
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Download only a selected timeframe",
+      }),
+    );
+    const start = screen.getByRole("textbox", { name: "Clip start time" });
+    const end = screen.getByRole("textbox", { name: "Clip end time" });
+    await user.clear(start);
+    await user.type(start, "0:12.5");
+    await user.clear(end);
+    await user.type(end, "0:30.75");
+
+    expect(
+      screen.getByRole("status", { name: "Selected clip duration" }),
+    ).toHaveTextContent("18.25 seconds selected");
+    await user.click(screen.getByRole("button", { name: "Download now" }));
+
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          clip: {
+            startSeconds: 12.5,
+            durationSeconds: 18.25,
+            precise: true,
+          },
+        }),
+      }),
+      true,
+    );
   });
 
   it("recognizes an AMD AMF-only system without a vendor choice", async () => {
