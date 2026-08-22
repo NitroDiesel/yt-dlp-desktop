@@ -29,6 +29,8 @@ use crate::{
     persistence::Database,
 };
 
+const MAX_RECENT_DOWNLOAD_DIRECTORIES: usize = 6;
+
 pub struct AppService {
     pub db: Database,
     dependencies: DependencyManager,
@@ -471,9 +473,22 @@ impl AppService {
     }
     pub async fn save_settings(self: &Arc<Self>, settings: AppSettings) -> AppResult<AppSettings> {
         validate_settings(&settings)?;
+        let mut current = self.settings.write().await;
         self.db.save_settings(&settings).await?;
-        *self.settings.write().await = settings.clone();
+        *current = settings.clone();
+        drop(current);
         self.clone().schedule().await?;
+        Ok(settings)
+    }
+    pub async fn remember_download_directory(
+        self: &Arc<Self>,
+        directory: String,
+    ) -> AppResult<AppSettings> {
+        let mut current = self.settings.write().await;
+        let settings = with_remembered_download_directory(&current, &directory)?;
+        validate_settings(&settings)?;
+        self.db.save_settings(&settings).await?;
+        *current = settings.clone();
         Ok(settings)
     }
     pub async fn dependencies(&self) -> Vec<DependencyInfo> {
@@ -540,6 +555,26 @@ fn validate_settings(settings: &AppSettings) -> AppResult<()> {
         return Err(AppError::Validation(
             "Choose an absolute download folder".into(),
         ));
+    }
+    if settings.recent_download_directories.len() > MAX_RECENT_DOWNLOAD_DIRECTORIES {
+        return Err(AppError::Validation(format!(
+            "Only the {MAX_RECENT_DOWNLOAD_DIRECTORIES} most recent download folders can be saved"
+        )));
+    }
+    for (index, directory) in settings.recent_download_directories.iter().enumerate() {
+        if directory.trim() != directory || !PathBuf::from(directory).is_absolute() {
+            return Err(AppError::Validation(
+                "Recent download folders must use absolute paths".into(),
+            ));
+        }
+        if settings.recent_download_directories[..index]
+            .iter()
+            .any(|candidate| same_directory(candidate, directory))
+        {
+            return Err(AppError::Validation(
+                "Recent download folders must be unique".into(),
+            ));
+        }
     }
     for (label, value) in [
         ("yt-dlp", settings.yt_dlp_path.as_deref()),
@@ -615,9 +650,43 @@ fn validate_settings(settings: &AppSettings) -> AppResult<()> {
     Ok(())
 }
 
+fn with_remembered_download_directory(
+    settings: &AppSettings,
+    directory: &str,
+) -> AppResult<AppSettings> {
+    let directory = directory.trim();
+    if directory.is_empty() || !PathBuf::from(directory).is_absolute() {
+        return Err(AppError::Validation(
+            "Choose an absolute download folder".into(),
+        ));
+    }
+
+    let mut updated = settings.clone();
+    updated
+        .recent_download_directories
+        .retain(|candidate| !same_directory(candidate, directory));
+    updated
+        .recent_download_directories
+        .insert(0, directory.into());
+    updated
+        .recent_download_directories
+        .truncate(MAX_RECENT_DOWNLOAD_DIRECTORIES);
+    Ok(updated)
+}
+
+fn same_directory(left: &str, right: &str) -> bool {
+    if cfg!(windows) {
+        left.replace('/', "\\")
+            .eq_ignore_ascii_case(&right.replace('/', "\\"))
+    } else {
+        left == right
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::validate_downloaded_file;
+    use super::{validate_downloaded_file, with_remembered_download_directory};
+    use crate::domain::AppSettings;
     use std::fs;
 
     #[tokio::test]
@@ -647,6 +716,42 @@ mod tests {
             validate_downloaded_file(destination.to_str().unwrap(), &output)
                 .await
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn recent_download_directories_are_promoted_deduplicated_and_bounded() {
+        let root = if cfg!(windows) {
+            r"C:\Downloads"
+        } else {
+            "/downloads"
+        };
+        let settings = AppSettings {
+            recent_download_directories: (1..=6).map(|index| format!("{root}{index}")).collect(),
+            ..AppSettings::default()
+        };
+
+        let promoted = with_remembered_download_directory(&settings, &format!("{root}3"))
+            .expect("existing directory should be promoted");
+        assert_eq!(promoted.recent_download_directories[0], format!("{root}3"));
+        assert_eq!(promoted.recent_download_directories.len(), 6);
+        assert_eq!(
+            promoted
+                .recent_download_directories
+                .iter()
+                .filter(|directory| *directory == &format!("{root}3"))
+                .count(),
+            1
+        );
+
+        let added = with_remembered_download_directory(&promoted, &format!("{root}7"))
+            .expect("new directory should be remembered");
+        assert_eq!(added.recent_download_directories[0], format!("{root}7"));
+        assert_eq!(added.recent_download_directories.len(), 6);
+        assert!(
+            !added
+                .recent_download_directories
+                .contains(&format!("{root}6"))
         );
     }
 }

@@ -25,6 +25,8 @@ export const appApi = {
     invoke<void>("set_queue_paused", { paused }),
   saveSettings: (settings: AppSettings) =>
     invoke<AppSettings>("save_settings", { settings }),
+  rememberDownloadDirectory: (directory: string) =>
+    invoke<AppSettings>("remember_download_directory", { directory }),
   refreshDependencies: () =>
     invoke<AppSnapshot["dependencies"]>("refresh_dependencies"),
   refreshHardwareAcceleration: () =>

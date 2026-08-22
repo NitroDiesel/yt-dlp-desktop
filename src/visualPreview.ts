@@ -4,6 +4,10 @@ import type { AppSnapshot, MediaProbe } from "./types/contracts";
 const snapshot: AppSnapshot = {
   settings: {
     downloadDirectory: "C:\\Users\\Demo\\Downloads",
+    recentDownloadDirectories: [
+      "C:\\Users\\Demo\\Downloads",
+      "D:\\Media\\Saved clips",
+    ],
     filenameTemplate: "%(title).200B [%(id)s].%(ext)s",
     defaultMode: "video",
     defaultQuality: "best",
@@ -99,6 +103,7 @@ export async function installVisualPreview() {
         case "refresh_hardware_acceleration":
           return snapshot.hardwareAcceleration;
         case "save_settings":
+        case "remember_download_directory":
           return snapshot.settings;
         default:
           return undefined;

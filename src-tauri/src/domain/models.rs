@@ -206,6 +206,8 @@ pub struct DownloadJob {
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub download_directory: String,
+    #[serde(default)]
+    pub recent_download_directories: Vec<String>,
     pub filename_template: String,
     pub default_mode: MediaMode,
     pub default_quality: String,
@@ -232,6 +234,7 @@ impl Default for AppSettings {
             .into_owned();
         Self {
             download_directory,
+            recent_download_directories: Vec::new(),
             filename_template: "%(title).200B [%(id)s].%(ext)s".into(),
             default_mode: MediaMode::Video,
             default_quality: "best".into(),
@@ -385,5 +388,24 @@ mod tests {
         assert!(!request.is_playlist);
         assert!(request.options.clip.is_none());
         assert!(request.options.video_conversion.is_none());
+    }
+
+    #[test]
+    fn old_settings_default_recent_download_directories_to_empty() {
+        let defaults = AppSettings::default();
+        let value = serde_json::json!({
+            "downloadDirectory": defaults.download_directory,
+            "filenameTemplate": defaults.filename_template,
+            "defaultMode": "video",
+            "defaultQuality": "best",
+            "queueConcurrency": 1,
+            "theme": "system",
+            "reducedMotion": false,
+            "retries": 10,
+            "fragmentRetries": 10
+        });
+
+        let settings: AppSettings = serde_json::from_value(value).unwrap();
+        assert!(settings.recent_download_directories.is_empty());
     }
 }

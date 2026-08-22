@@ -85,6 +85,17 @@ pub async fn save_settings(
     service.inner().clone().save_settings(settings).await
 }
 #[tauri::command]
+pub async fn remember_download_directory(
+    service: State<'_, Arc<AppService>>,
+    directory: String,
+) -> AppResult<AppSettings> {
+    service
+        .inner()
+        .clone()
+        .remember_download_directory(directory)
+        .await
+}
+#[tauri::command]
 pub async fn refresh_dependencies(
     service: State<'_, Arc<AppService>>,
 ) -> AppResult<Vec<DependencyInfo>> {

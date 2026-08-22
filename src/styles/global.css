@@ -1046,6 +1046,75 @@ h3 {
   font: 400 0.59rem/1.5 "IBM Plex Mono", monospace;
 }
 
+.destination-picker {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.destination-picker .path-picker {
+  width: 100%;
+}
+
+.recent-destination {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.recent-destination:focus-within,
+.recent-destination:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.recent-destination > svg {
+  width: 13px;
+  height: 13px;
+  pointer-events: none;
+}
+
+.recent-destination > span {
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+}
+
+.recent-destination select {
+  min-width: 0;
+  height: 29px;
+  padding: 0 20px 0 0;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 400 0.61rem/1.4 "IBM Plex Mono", monospace;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.recent-destination select:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.recent-destination select + svg {
+  margin-left: -18px;
+}
+
+.destination-picker--compact {
+  gap: 5px;
+}
+
 .download-actions {
   display: flex;
   justify-content: flex-end;
