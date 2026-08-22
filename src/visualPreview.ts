@@ -4,10 +4,7 @@ import type { AppSnapshot, MediaProbe } from "./types/contracts";
 const snapshot: AppSnapshot = {
   settings: {
     downloadDirectory: "C:\\Users\\Demo\\Downloads",
-    recentDownloadDirectories: [
-      "C:\\Users\\Demo\\Downloads",
-      "D:\\Media\\Saved clips",
-    ],
+    lastDownloadDirectory: "D:\\Media\\Saved clips",
     filenameTemplate: "%(title).200B [%(id)s].%(ext)s",
     defaultMode: "video",
     defaultQuality: "best",

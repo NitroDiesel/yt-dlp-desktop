@@ -207,7 +207,9 @@ pub struct DownloadJob {
 pub struct AppSettings {
     pub download_directory: String,
     #[serde(default)]
-    pub recent_download_directories: Vec<String>,
+    pub last_download_directory: Option<String>,
+    #[serde(default, rename = "recentDownloadDirectories", skip_serializing)]
+    pub legacy_recent_download_directories: Vec<String>,
     pub filename_template: String,
     pub default_mode: MediaMode,
     pub default_quality: String,
@@ -234,7 +236,8 @@ impl Default for AppSettings {
             .into_owned();
         Self {
             download_directory,
-            recent_download_directories: Vec::new(),
+            last_download_directory: None,
+            legacy_recent_download_directories: Vec::new(),
             filename_template: "%(title).200B [%(id)s].%(ext)s".into(),
             default_mode: MediaMode::Video,
             default_quality: "best".into(),
@@ -391,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn old_settings_default_recent_download_directories_to_empty() {
+    fn old_settings_default_last_download_directory_to_none() {
         let defaults = AppSettings::default();
         let value = serde_json::json!({
             "downloadDirectory": defaults.download_directory,
@@ -406,6 +409,25 @@ mod tests {
         });
 
         let settings: AppSettings = serde_json::from_value(value).unwrap();
-        assert!(settings.recent_download_directories.is_empty());
+        assert!(settings.last_download_directory.is_none());
+        assert!(settings.legacy_recent_download_directories.is_empty());
+    }
+
+    #[test]
+    fn v014_recent_directories_are_available_only_for_migration() {
+        let mut value = serde_json::to_value(AppSettings::default()).unwrap();
+        value.as_object_mut().unwrap().insert(
+            "recentDownloadDirectories".into(),
+            serde_json::json!([r"D:\Saved videos"]),
+        );
+
+        let settings: AppSettings = serde_json::from_value(value).unwrap();
+        assert_eq!(
+            settings.legacy_recent_download_directories,
+            vec![r"D:\Saved videos"]
+        );
+
+        let persisted = serde_json::to_value(settings).unwrap();
+        assert!(persisted.get("recentDownloadDirectories").is_none());
     }
 }

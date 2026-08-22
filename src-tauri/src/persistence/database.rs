@@ -284,7 +284,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn recent_download_directories_survive_a_database_reconnect() {
+    async fn last_download_directory_survives_a_database_reconnect() {
         let directory = tempfile::tempdir().unwrap();
         let database_path = directory.path().join("test.sqlite3");
         let db = Database::connect(&database_path).await.unwrap();
@@ -294,7 +294,7 @@ mod tests {
             "/media/saved-videos"
         };
         let settings = AppSettings {
-            recent_download_directories: vec![recent.into()],
+            last_download_directory: Some(recent.into()),
             ..AppSettings::default()
         };
         db.save_settings(&settings).await.unwrap();
@@ -302,6 +302,6 @@ mod tests {
 
         let reopened = Database::connect(&database_path).await.unwrap();
         let restored = reopened.settings().await.unwrap();
-        assert_eq!(restored.recent_download_directories, vec![recent]);
+        assert_eq!(restored.last_download_directory.as_deref(), Some(recent));
     }
 }

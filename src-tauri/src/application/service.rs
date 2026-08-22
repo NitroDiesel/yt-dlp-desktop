@@ -29,8 +29,6 @@ use crate::{
     persistence::Database,
 };
 
-const MAX_RECENT_DOWNLOAD_DIRECTORIES: usize = 6;
-
 pub struct AppService {
     pub db: Database,
     dependencies: DependencyManager,
@@ -46,7 +44,10 @@ impl AppService {
     pub async fn new(app: AppHandle, data_dir: PathBuf) -> AppResult<Arc<Self>> {
         let db = Database::connect(&data_dir.join("workspace.sqlite3")).await?;
         db.recover_interrupted().await?;
-        let settings = db.settings().await?;
+        let mut settings = db.settings().await?;
+        if restore_last_download_directory(&mut settings).await {
+            db.save_settings(&settings).await?;
+        }
         let executable = std::env::current_exe().map_err(|error| {
             AppError::Process(format!("Cannot locate the app executable: {error}"))
         })?;
@@ -484,8 +485,26 @@ impl AppService {
         self: &Arc<Self>,
         directory: String,
     ) -> AppResult<AppSettings> {
+        let directory = directory.trim();
+        let path = PathBuf::from(directory);
+        if directory.is_empty() || !path.is_absolute() {
+            return Err(AppError::Validation(
+                "Choose an absolute download folder".into(),
+            ));
+        }
+        let metadata = tokio::fs::metadata(&path)
+            .await
+            .map_err(|_| AppError::Validation("The selected folder is unavailable".into()))?;
+        if !metadata.is_dir() {
+            return Err(AppError::Validation(
+                "Choose an existing download folder".into(),
+            ));
+        }
+
         let mut current = self.settings.write().await;
-        let settings = with_remembered_download_directory(&current, &directory)?;
+        let mut settings = current.clone();
+        settings.last_download_directory = Some(directory.into());
+        settings.legacy_recent_download_directories.clear();
         validate_settings(&settings)?;
         self.db.save_settings(&settings).await?;
         *current = settings.clone();
@@ -556,25 +575,12 @@ fn validate_settings(settings: &AppSettings) -> AppResult<()> {
             "Choose an absolute download folder".into(),
         ));
     }
-    if settings.recent_download_directories.len() > MAX_RECENT_DOWNLOAD_DIRECTORIES {
-        return Err(AppError::Validation(format!(
-            "Only the {MAX_RECENT_DOWNLOAD_DIRECTORIES} most recent download folders can be saved"
-        )));
-    }
-    for (index, directory) in settings.recent_download_directories.iter().enumerate() {
-        if directory.trim() != directory || !PathBuf::from(directory).is_absolute() {
-            return Err(AppError::Validation(
-                "Recent download folders must use absolute paths".into(),
-            ));
-        }
-        if settings.recent_download_directories[..index]
-            .iter()
-            .any(|candidate| same_directory(candidate, directory))
-        {
-            return Err(AppError::Validation(
-                "Recent download folders must be unique".into(),
-            ));
-        }
+    if let Some(directory) = settings.last_download_directory.as_deref()
+        && (directory.trim() != directory || !PathBuf::from(directory).is_absolute())
+    {
+        return Err(AppError::Validation(
+            "The last download folder must use an absolute path".into(),
+        ));
     }
     for (label, value) in [
         ("yt-dlp", settings.yt_dlp_path.as_deref()),
@@ -650,42 +656,34 @@ fn validate_settings(settings: &AppSettings) -> AppResult<()> {
     Ok(())
 }
 
-fn with_remembered_download_directory(
-    settings: &AppSettings,
-    directory: &str,
-) -> AppResult<AppSettings> {
-    let directory = directory.trim();
-    if directory.is_empty() || !PathBuf::from(directory).is_absolute() {
-        return Err(AppError::Validation(
-            "Choose an absolute download folder".into(),
-        ));
+async fn restore_last_download_directory(settings: &mut AppSettings) -> bool {
+    let original = settings.last_download_directory.clone();
+    let had_legacy_directories = !settings.legacy_recent_download_directories.is_empty();
+    let mut candidates = Vec::new();
+    if let Some(directory) = settings.last_download_directory.take() {
+        candidates.push(directory);
+    }
+    candidates.append(&mut settings.legacy_recent_download_directories);
+
+    settings.last_download_directory = None;
+    for directory in candidates {
+        let path = PathBuf::from(&directory);
+        if path.is_absolute()
+            && tokio::fs::metadata(&path)
+                .await
+                .is_ok_and(|metadata| metadata.is_dir())
+        {
+            settings.last_download_directory = Some(directory);
+            break;
+        }
     }
 
-    let mut updated = settings.clone();
-    updated
-        .recent_download_directories
-        .retain(|candidate| !same_directory(candidate, directory));
-    updated
-        .recent_download_directories
-        .insert(0, directory.into());
-    updated
-        .recent_download_directories
-        .truncate(MAX_RECENT_DOWNLOAD_DIRECTORIES);
-    Ok(updated)
-}
-
-fn same_directory(left: &str, right: &str) -> bool {
-    if cfg!(windows) {
-        left.replace('/', "\\")
-            .eq_ignore_ascii_case(&right.replace('/', "\\"))
-    } else {
-        left == right
-    }
+    original != settings.last_download_directory || had_legacy_directories
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_downloaded_file, with_remembered_download_directory};
+    use super::{restore_last_download_directory, validate_downloaded_file};
     use crate::domain::AppSettings;
     use std::fs;
 
@@ -719,39 +717,36 @@ mod tests {
         );
     }
 
-    #[test]
-    fn recent_download_directories_are_promoted_deduplicated_and_bounded() {
-        let root = if cfg!(windows) {
-            r"C:\Downloads"
-        } else {
-            "/downloads"
-        };
-        let settings = AppSettings {
-            recent_download_directories: (1..=6).map(|index| format!("{root}{index}")).collect(),
+    #[tokio::test]
+    async fn last_download_directory_is_restored_or_cleared_when_deleted() {
+        let root = tempfile::tempdir().unwrap();
+        let saved = root.path().join("saved-videos");
+        fs::create_dir(&saved).unwrap();
+        let mut settings = AppSettings {
+            last_download_directory: Some(saved.to_string_lossy().into_owned()),
             ..AppSettings::default()
         };
 
-        let promoted = with_remembered_download_directory(&settings, &format!("{root}3"))
-            .expect("existing directory should be promoted");
-        assert_eq!(promoted.recent_download_directories[0], format!("{root}3"));
-        assert_eq!(promoted.recent_download_directories.len(), 6);
-        assert_eq!(
-            promoted
-                .recent_download_directories
-                .iter()
-                .filter(|directory| *directory == &format!("{root}3"))
-                .count(),
-            1
-        );
+        assert!(!restore_last_download_directory(&mut settings).await);
+        assert_eq!(settings.last_download_directory.as_deref(), saved.to_str());
 
-        let added = with_remembered_download_directory(&promoted, &format!("{root}7"))
-            .expect("new directory should be remembered");
-        assert_eq!(added.recent_download_directories[0], format!("{root}7"));
-        assert_eq!(added.recent_download_directories.len(), 6);
-        assert!(
-            !added
-                .recent_download_directories
-                .contains(&format!("{root}6"))
-        );
+        fs::remove_dir(&saved).unwrap();
+        assert!(restore_last_download_directory(&mut settings).await);
+        assert!(settings.last_download_directory.is_none());
+    }
+
+    #[tokio::test]
+    async fn v014_recent_directory_migrates_to_the_last_used_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let saved = root.path().join("saved-videos");
+        fs::create_dir(&saved).unwrap();
+        let mut settings = AppSettings {
+            legacy_recent_download_directories: vec![saved.to_string_lossy().into_owned()],
+            ..AppSettings::default()
+        };
+
+        assert!(restore_last_download_directory(&mut settings).await);
+        assert_eq!(settings.last_download_directory.as_deref(), saved.to_str());
+        assert!(settings.legacy_recent_download_directories.is_empty());
     }
 }

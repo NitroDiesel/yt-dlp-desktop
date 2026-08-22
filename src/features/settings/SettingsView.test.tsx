@@ -10,7 +10,6 @@ vi.mock("@tauri-apps/plugin-dialog", () => dialogMocks);
 
 const settings: AppSettings = {
   downloadDirectory: "C:\\Downloads",
-  recentDownloadDirectories: [],
   filenameTemplate: "%(title)s.%(ext)s",
   defaultMode: "video",
   defaultQuality: "best",
