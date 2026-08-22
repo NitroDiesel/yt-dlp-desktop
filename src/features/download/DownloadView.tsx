@@ -109,9 +109,7 @@ export function DownloadView() {
   } = useAppStore();
   const [url, setUrl] = useState("");
   const [destination, setDestination] = useState(
-    settings?.recentDownloadDirectories[0] ??
-      settings?.downloadDirectory ??
-      "",
+    settings?.lastDownloadDirectory ?? settings?.downloadDirectory ?? "",
   );
   const [options, setOptions] = useState<DownloadOptions>({
     ...defaultOptions,
@@ -201,7 +199,7 @@ export function DownloadView() {
       await rememberDownloadDirectory(directory);
     } catch {
       setSubmitError(
-        "This folder is selected, but it could not be added to Recent folders.",
+        "This folder is selected, but it could not be remembered for the next download.",
       );
     }
   }
@@ -351,15 +349,11 @@ export function DownloadView() {
                 <DestinationPicker
                   compact
                   destination={destination}
-                  recentDirectories={
-                    settings?.recentDownloadDirectories ?? []
-                  }
                   filenameTemplate={
                     settings?.filenameTemplate ??
                     "%(title).200B [%(id)s].%(ext)s"
                   }
                   onBrowse={() => void chooseDestination()}
-                  onSelect={(directory) => void selectDestination(directory)}
                 />
               </div>
             </div>
@@ -903,13 +897,11 @@ export function DownloadView() {
               </div>
               <DestinationPicker
                 destination={destination}
-                recentDirectories={settings?.recentDownloadDirectories ?? []}
                 filenameTemplate={
                   settings?.filenameTemplate ??
                   "%(title).200B [%(id)s].%(ext)s"
                 }
                 onBrowse={() => void chooseDestination()}
-                onSelect={(directory) => void selectDestination(directory)}
               />
             </section>
 

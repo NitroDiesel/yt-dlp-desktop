@@ -108,7 +108,7 @@ export interface DownloadJob {
 
 export interface AppSettings {
   downloadDirectory: string;
-  recentDownloadDirectories: string[];
+  lastDownloadDirectory?: string;
   filenameTemplate: string;
   defaultMode: MediaMode;
   defaultQuality: string;
