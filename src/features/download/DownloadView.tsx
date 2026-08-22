@@ -7,7 +7,6 @@ import {
   Clipboard,
   Cpu,
   Download,
-  FolderOpen,
   ListPlus,
   Radio,
   Scissors,
@@ -29,6 +28,7 @@ import type {
   HardwareCodec,
 } from "../../types/contracts";
 import { ClipEditor } from "./ClipEditor";
+import { DestinationPicker } from "./DestinationPicker";
 
 const qualityOptions = [
   {
@@ -104,11 +104,14 @@ export function DownloadView() {
     cancelAnalysis,
     clearProbe,
     enqueue,
+    rememberDownloadDirectory,
     setView,
   } = useAppStore();
   const [url, setUrl] = useState("");
   const [destination, setDestination] = useState(
-    settings?.downloadDirectory ?? "",
+    settings?.recentDownloadDirectories[0] ??
+      settings?.downloadDirectory ??
+      "",
   );
   const [options, setOptions] = useState<DownloadOptions>({
     ...defaultOptions,
@@ -188,7 +191,19 @@ export function DownloadView() {
       multiple: false,
       defaultPath: destination || undefined,
     });
-    if (selected) setDestination(selected);
+    if (selected) await selectDestination(selected);
+  }
+
+  async function selectDestination(directory: string) {
+    setDestination(directory);
+    setSubmitError(undefined);
+    try {
+      await rememberDownloadDirectory(directory);
+    } catch {
+      setSubmitError(
+        "This folder is selected, but it could not be added to Recent folders.",
+      );
+    }
   }
 
   async function submit(startImmediately: boolean) {
@@ -333,20 +348,19 @@ export function DownloadView() {
               </div>
               <div className="download-basics__group">
                 <span className="download-basics__label">Save to</span>
-                <button
-                  type="button"
-                  className="path-picker path-picker--compact"
-                  onClick={() => void chooseDestination()}
-                >
-                  <FolderOpen aria-hidden="true" />
-                  <span>
-                    <strong>{destination || "Select a folder"}</strong>
-                    <small>
-                      {settings?.filenameTemplate ??
-                        "%(title).200B [%(id)s].%(ext)s"}
-                    </small>
-                  </span>
-                </button>
+                <DestinationPicker
+                  compact
+                  destination={destination}
+                  recentDirectories={
+                    settings?.recentDownloadDirectories ?? []
+                  }
+                  filenameTemplate={
+                    settings?.filenameTemplate ??
+                    "%(title).200B [%(id)s].%(ext)s"
+                  }
+                  onBrowse={() => void chooseDestination()}
+                  onSelect={(directory) => void selectDestination(directory)}
+                />
               </div>
             </div>
           )}
@@ -887,20 +901,16 @@ export function DownloadView() {
                 <p className="step-label">SAVE TO</p>
                 <h2 id="destination-title">Destination</h2>
               </div>
-              <button
-                type="button"
-                className="path-picker"
-                onClick={() => void chooseDestination()}
-              >
-                <FolderOpen aria-hidden="true" />
-                <span>
-                  <strong>{destination || "Select a folder"}</strong>
-                  <small>
-                    {settings?.filenameTemplate ??
-                      "%(title).200B [%(id)s].%(ext)s"}
-                  </small>
-                </span>
-              </button>
+              <DestinationPicker
+                destination={destination}
+                recentDirectories={settings?.recentDownloadDirectories ?? []}
+                filenameTemplate={
+                  settings?.filenameTemplate ??
+                  "%(title).200B [%(id)s].%(ext)s"
+                }
+                onBrowse={() => void chooseDestination()}
+                onSelect={(directory) => void selectDestination(directory)}
+              />
             </section>
 
             {clipValidation?.kind === "valid" && (

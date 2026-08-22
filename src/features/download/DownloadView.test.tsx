@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../../app/store";
@@ -10,6 +10,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => dialogMocks);
 
 const settings: AppSettings = {
   downloadDirectory: "C:\\Downloads",
+  recentDownloadDirectories: ["C:\\Downloads", "D:\\Saved videos"],
   filenameTemplate: "%(title)s.%(ext)s",
   defaultMode: "video",
   defaultQuality: "best",
@@ -100,6 +101,7 @@ describe("DownloadView", () => {
         ],
       },
       enqueue: vi.fn(),
+      rememberDownloadDirectory: vi.fn(),
       setView: vi.fn(),
     });
   });
@@ -264,5 +266,34 @@ describe("DownloadView", () => {
     expect(
       screen.getByRole("checkbox", { name: /Decode on the GPU too/ }),
     ).toBeDisabled();
+  });
+
+  it("reuses and remembers recent download folders", async () => {
+    const user = userEvent.setup();
+    const rememberDownloadDirectory = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({ rememberDownloadDirectory });
+    render(<DownloadView />);
+
+    const recentFolders = screen.getByRole("combobox", {
+      name: "Recent download folders",
+    });
+    expect(recentFolders).toHaveValue("C:\\Downloads");
+
+    await user.selectOptions(recentFolders, "D:\\Saved videos");
+    expect(rememberDownloadDirectory).toHaveBeenCalledWith(
+      "D:\\Saved videos",
+    );
+    expect(recentFolders).toHaveValue("D:\\Saved videos");
+
+    dialogMocks.open.mockResolvedValueOnce("E:\\New downloads");
+    await user.click(
+      screen.getByRole("button", { name: "Browse for a download folder" }),
+    );
+    await waitFor(() =>
+      expect(rememberDownloadDirectory).toHaveBeenCalledWith(
+        "E:\\New downloads",
+      ),
+    );
+    expect(recentFolders).toHaveValue("E:\\New downloads");
   });
 });

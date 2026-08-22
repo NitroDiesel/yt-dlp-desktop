@@ -43,6 +43,7 @@ interface AppState {
   reorder: (jobId: string, direction: "up" | "down") => Promise<void>;
   setPaused: (paused: boolean) => Promise<void>;
   saveSettings: (settings: AppSettings) => Promise<void>;
+  rememberDownloadDirectory: (directory: string) => Promise<void>;
   refreshEngineStatus: () => Promise<void>;
   removeHistory: (jobId: string) => Promise<void>;
 }
@@ -141,6 +142,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   saveSettings: async (settings) => {
     const saved = await appApi.saveSettings(settings);
     set({ settings: saved });
+  },
+  rememberDownloadDirectory: async (directory) => {
+    const settings = await appApi.rememberDownloadDirectory(directory);
+    set({ settings });
   },
   refreshEngineStatus: async () => {
     const [dependencies, hardwareAcceleration] = await Promise.all([

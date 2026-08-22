@@ -282,4 +282,26 @@ mod tests {
         assert!(db.queue().await.unwrap().is_empty());
         assert_eq!(db.history().await.unwrap().len(), 1);
     }
+
+    #[tokio::test]
+    async fn recent_download_directories_survive_a_database_reconnect() {
+        let directory = tempfile::tempdir().unwrap();
+        let database_path = directory.path().join("test.sqlite3");
+        let db = Database::connect(&database_path).await.unwrap();
+        let recent = if cfg!(windows) {
+            r"D:\Saved videos"
+        } else {
+            "/media/saved-videos"
+        };
+        let settings = AppSettings {
+            recent_download_directories: vec![recent.into()],
+            ..AppSettings::default()
+        };
+        db.save_settings(&settings).await.unwrap();
+        drop(db);
+
+        let reopened = Database::connect(&database_path).await.unwrap();
+        let restored = reopened.settings().await.unwrap();
+        assert_eq!(restored.recent_download_directories, vec![recent]);
+    }
 }
