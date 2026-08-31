@@ -125,6 +125,29 @@ describe("DownloadView", () => {
     expect(screen.getByText("Expert arguments")).toBeVisible();
   });
 
+  it("passes the selected audio bitrate to the download request", async () => {
+    const user = userEvent.setup();
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({ enqueue });
+    render(<DownloadView />);
+
+    await user.click(screen.getByRole("radio", { name: "Audio" }));
+    await user.selectOptions(screen.getByLabelText("Audio format"), "mp3");
+    await user.click(screen.getByRole("radio", { name: /320 kbps/ }));
+    await user.click(screen.getByRole("button", { name: "Download now" }));
+
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          mode: "audio",
+          audioFormat: "mp3",
+          audioQuality: "320K",
+        }),
+      }),
+      true,
+    );
+  });
+
   it("allows analysis when a bundled engine is ready but its version probe was slow", async () => {
     const user = userEvent.setup();
     const analyze = vi.fn().mockResolvedValue(undefined);
@@ -180,6 +203,26 @@ describe("DownloadView", () => {
 
     await user.click(screen.getByRole("button", { name: "Download now" }));
     expect(enqueue).toHaveBeenCalledOnce();
+  });
+
+  it("shows a usable error when playlist confirmation cannot open", async () => {
+    const user = userEvent.setup();
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({
+      probe: { ...probe, isPlaylist: true, playlistCount: 24 },
+      enqueue,
+    });
+    dialogMocks.confirm.mockRejectedValueOnce(
+      new Error("dialog.confirm not allowed"),
+    );
+    render(<DownloadView />);
+
+    await user.click(screen.getByRole("button", { name: "Download now" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Playlist confirmation unavailable. Please try the download again.",
+    );
+    expect(enqueue).not.toHaveBeenCalled();
   });
 
   it("offers detected GPU codecs as an automatic conversion step", async () => {

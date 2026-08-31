@@ -826,6 +826,15 @@ h3 {
   background: color-mix(in srgb, var(--brand-soft) 65%, transparent);
 }
 
+.choice-card--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.choice-card--disabled:hover {
+  border-color: var(--line);
+}
+
 .choice-card input {
   margin-top: 3px;
   accent-color: var(--brand);
@@ -911,6 +920,28 @@ h3 {
   background: var(--signal-soft);
   color: var(--muted);
   font-size: 0.7rem;
+}
+
+.audio-options {
+  display: grid;
+  gap: 13px;
+}
+
+.audio-quality-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.audio-quality-heading small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 400;
+  text-align: right;
 }
 
 .disclosure-button {
@@ -1155,8 +1186,6 @@ h3 {
 
 .job-card {
   position: relative;
-  display: grid;
-  grid-template-columns: 3px minmax(0, 1fr);
   overflow: hidden;
   border-bottom: 1px solid var(--line);
   background: transparent;
@@ -1173,37 +1202,6 @@ h3 {
 
 .job-card:only-child {
   border-radius: 7px;
-}
-
-.job-card__rail {
-  position: relative;
-  background: var(--line);
-}
-
-.job-card__rail span {
-  position: absolute;
-  inset: auto 0 0;
-  background: var(--brand);
-  transition: height 240ms ease;
-}
-
-.job-card--failed .job-card__rail {
-  background: var(--danger-soft);
-}
-
-.job-card--failed .job-card__rail span {
-  height: 100% !important;
-  background: var(--danger);
-}
-
-.job-card--completed .job-card__rail span {
-  height: 100% !important;
-  background: var(--success);
-}
-
-.job-card--interrupted .job-card__rail span {
-  height: 100% !important;
-  background: var(--signal);
 }
 
 .job-card__content {

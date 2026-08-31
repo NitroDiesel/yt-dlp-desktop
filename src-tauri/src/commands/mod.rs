@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use tauri::State;
 
@@ -125,7 +128,13 @@ pub async fn reveal_job_output(
     job_id: String,
 ) -> AppResult<()> {
     let path = validated_output(&service, &job_id).await?;
-    platform::reveal_path(&path).await
+    platform::open_path(containing_directory(&path)?).await
+}
+
+fn containing_directory(path: &Path) -> AppResult<&Path> {
+    path.parent()
+        .filter(|directory| !directory.as_os_str().is_empty())
+        .ok_or_else(|| AppError::Validation("The download folder is unavailable".into()))
 }
 
 async fn validated_output(service: &Arc<AppService>, job_id: &str) -> AppResult<PathBuf> {
@@ -140,4 +149,20 @@ async fn validated_output(service: &Arc<AppService>, job_id: &str) -> AppResult<
         .map(PathBuf::from)
         .ok_or_else(|| AppError::Validation("This job has no recorded output file".into()))?;
     validate_downloaded_file(&job.request.destination, &output).await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use super::containing_directory;
+
+    #[test]
+    fn show_in_folder_targets_the_downloaded_files_parent() {
+        let directory = PathBuf::from("downloads").join("music");
+        let output = directory.join("track.mp3");
+
+        assert_eq!(containing_directory(&output).unwrap(), directory);
+        assert!(containing_directory(Path::new("track.mp3")).is_err());
+    }
 }

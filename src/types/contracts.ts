@@ -1,6 +1,8 @@
 export type MediaMode = "video" | "audio" | "custom";
 export type HardwareCodec = "h264" | "hevc" | "av1";
 export type HardwareEncoderProvider = "nvenc" | "amf";
+export type AudioFormat = "best" | "mp3" | "m4a" | "opus" | "flac" | "wav";
+export type AudioQuality = "best" | "320K" | "256K" | "192K" | "128K";
 export type JobStatus =
   | "queued"
   | "analyzing"
@@ -49,7 +51,8 @@ export interface MediaProbe {
 export interface DownloadOptions {
   mode: MediaMode;
   quality: string;
-  audioFormat: "best" | "mp3" | "m4a" | "opus" | "flac" | "wav";
+  audioFormat: AudioFormat;
+  audioQuality: AudioQuality;
   subtitleLanguages: string[];
   writeSubtitles: boolean;
   writeAutomaticSubtitles: boolean;

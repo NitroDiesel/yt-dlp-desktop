@@ -9,7 +9,7 @@ The installer includes pinned, checksum-verified builds of **yt-dlp, FFmpeg, FFp
 ## What it does
 
 - Analyzes a video, playlist, or channel URL before downloading.
-- Offers clear video, audio, subtitle, metadata, and destination choices.
+- Offers clear video, audio format and bitrate, subtitle, metadata, and destination choices.
 - Remembers the last used download folder across app restarts and falls back when it is removed.
 - Persists the queue, history, settings, progress, errors, and diagnostics in SQLite.
 - Supports pause, reorder, retry, cancel, reveal, and open actions.

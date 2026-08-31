@@ -131,7 +131,7 @@ impl AppService {
                 .map(|path| path.to_string_lossy().into_owned());
         }
         let needs_ffmpeg = (request.options.mode == crate::domain::MediaMode::Audio
-            && request.options.audio_format != "best")
+            && request.options.audio_format != crate::domain::AudioFormat::Best)
             || request.options.embed_subtitles
             || request.options.video_conversion.is_some();
         if needs_ffmpeg && settings.ffmpeg_path.is_none() {
