@@ -35,9 +35,6 @@ export function JobCard({
       className={`job-card job-card--${job.status}`}
       aria-label={`${job.title || "Preparing download"}, ${job.status.replaceAll("_", " ")}`}
     >
-      <div className="job-card__rail" aria-hidden="true">
-        <span style={{ height: `${progress}%` }} />
-      </div>
       <div className="job-card__content">
         <header className="job-card__header">
           <div className="job-card__title">

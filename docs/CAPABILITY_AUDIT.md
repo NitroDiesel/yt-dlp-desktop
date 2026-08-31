@@ -19,7 +19,7 @@ Audited against the local upstream source tree at `D:\Coding2.0\yt-dlp-master`, 
 | Best single file | `-f b` | Explicit no-merge mode. |
 | Exact format | `-f <selector>` | Advanced selector is validated as one value. |
 | Source audio | `-f ba/b` | No conversion. |
-| Converted audio | `-x --audio-format <format>` | Rejected before enqueue when FFmpeg is unavailable. |
+| Converted audio | `-x --audio-format <format> --audio-quality <0\|bitrate>` | Best conversion quality uses `0`; MP3, M4A, and Opus also offer 320K, 256K, 192K, and 128K. Rejected before enqueue when FFmpeg is unavailable. |
 | Human subtitles | `--write-subs` | Languages use `--sub-langs`. |
 | Automatic captions | `--write-auto-subs` | May be combined with human subtitles. |
 | Embed subtitles | `--embed-subs` | Rejected without FFmpeg. |

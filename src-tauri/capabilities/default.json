@@ -3,5 +3,9 @@
   "identifier": "default",
   "description": "Minimal desktop permissions for yt-dlp Desktop",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-confirm"
+  ]
 }

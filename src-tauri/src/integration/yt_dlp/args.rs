@@ -3,7 +3,7 @@ use std::{ffi::OsString, path::Path};
 use url::Url;
 
 use crate::{
-    domain::{AppSettings, DownloadRequest, MediaMode},
+    domain::{AppSettings, AudioFormat, AudioQuality, DownloadRequest, MediaMode},
     error::{AppError, AppResult},
 };
 
@@ -21,6 +21,7 @@ const MANAGED_FLAGS: &[&str] = &[
     "-x",
     "--extract-audio",
     "--audio-format",
+    "--audio-quality",
     "--write-subs",
     "--write-auto-subs",
     "--sub-langs",
@@ -160,6 +161,13 @@ pub fn validate_request(request: &DownloadRequest) -> AppResult<()> {
             )));
         }
     }
+    if request.options.audio_quality != AudioQuality::Best
+        && !request.options.audio_format.supports_bitrate()
+    {
+        return Err(AppError::Validation(
+            "Choose a bitrate only for MP3, M4A, or Opus audio".into(),
+        ));
+    }
     if let Some(clip) = request.options.clip.as_ref() {
         let end_seconds = clip.start_seconds + clip.duration_seconds;
         if !clip.start_seconds.is_finite()
@@ -251,24 +259,22 @@ pub fn build_download_args(
             }
         },
         MediaMode::Audio => {
-            if request.options.audio_format == "best" {
+            if request.options.audio_format == AudioFormat::Best {
                 args.extend(["-f".into(), "ba".into()]);
             } else {
-                if !matches!(
-                    request.options.audio_format.as_str(),
-                    "mp3" | "m4a" | "opus" | "flac" | "wav"
-                ) {
-                    return Err(AppError::Validation(
-                        "Choose a supported audio format".into(),
-                    ));
-                }
                 args.extend([
                     "-f".into(),
                     "ba/b".into(),
                     "-x".into(),
                     "--audio-format".into(),
-                    request.options.audio_format.clone().into(),
+                    request.options.audio_format.as_str().into(),
                 ]);
+                if request.options.audio_format.supports_bitrate() {
+                    args.extend([
+                        "--audio-quality".into(),
+                        request.options.audio_quality.as_yt_dlp_value().into(),
+                    ]);
+                }
             }
         }
         MediaMode::Custom => args.extend([
@@ -381,7 +387,8 @@ mod tests {
             options: crate::domain::DownloadOptions {
                 mode: MediaMode::Video,
                 quality: "1080".into(),
-                audio_format: "best".into(),
+                audio_format: AudioFormat::Best,
+                audio_quality: AudioQuality::Best,
                 subtitle_languages: vec![],
                 write_subtitles: false,
                 write_automatic_subtitles: false,
@@ -404,6 +411,62 @@ mod tests {
                 .any(|arg| arg.to_string_lossy().contains("height<=1080"))
         );
         assert_eq!(args.last().unwrap(), "https://example.com/watch?v=1");
+    }
+
+    #[test]
+    fn applies_selected_audio_bitrate_during_lossy_conversion() {
+        let mut value = request();
+        value.options.mode = MediaMode::Audio;
+        value.options.audio_format = AudioFormat::Mp3;
+        value.options.audio_quality = AudioQuality::Kbps320;
+        let settings = AppSettings {
+            ffmpeg_path: Some(if cfg!(windows) {
+                r"C:\ffmpeg.exe".into()
+            } else {
+                "/tmp/ffmpeg".into()
+            }),
+            ..AppSettings::default()
+        };
+
+        let args = build_download_args(&value, &settings)
+            .unwrap()
+            .iter()
+            .map(|argument| argument.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--audio-format", "mp3"])
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--audio-quality", "320K"])
+        );
+    }
+
+    #[test]
+    fn rejects_bitrate_for_lossless_or_source_audio() {
+        let mut value = request();
+        value.options.mode = MediaMode::Audio;
+        value.options.audio_format = AudioFormat::Flac;
+        value.options.audio_quality = AudioQuality::Kbps320;
+
+        assert!(validate_request(&value).is_err());
+    }
+
+    #[test]
+    fn explicitly_requests_the_best_lossy_conversion_quality() {
+        let mut value = request();
+        value.options.mode = MediaMode::Audio;
+        value.options.audio_format = AudioFormat::Opus;
+
+        let args = build_download_args(&value, &AppSettings::default())
+            .unwrap()
+            .iter()
+            .map(|argument| argument.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert!(args.windows(2).any(|pair| pair == ["--audio-quality", "0"]));
     }
 
     #[test]

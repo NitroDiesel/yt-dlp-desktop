@@ -22,6 +22,8 @@ import {
   type ClipDraft,
 } from "../../lib/timecode";
 import type {
+  AudioFormat,
+  AudioQuality,
   DownloadOptions,
   DownloadRequest,
   MediaMode,
@@ -51,10 +53,36 @@ const qualityOptions = [
   },
 ];
 
+const audioFormatOptions = [
+  { value: "best", label: "Source audio — no conversion" },
+  { value: "mp3", label: "MP3 — broad compatibility" },
+  { value: "m4a", label: "M4A — AAC in an MP4 container" },
+  { value: "opus", label: "Opus — compact, high quality" },
+  { value: "flac", label: "FLAC — lossless" },
+  { value: "wav", label: "WAV — uncompressed" },
+] satisfies ReadonlyArray<{ value: AudioFormat; label: string }>;
+
+const audioQualityOptions = [
+  {
+    value: "best",
+    label: "Best available",
+    note: "Use FFmpeg's highest conversion quality",
+  },
+  { value: "320K", label: "320 kbps", note: "Highest MP3 bitrate" },
+  { value: "256K", label: "256 kbps", note: "High quality, smaller file" },
+  { value: "192K", label: "192 kbps", note: "Balanced quality and size" },
+  { value: "128K", label: "128 kbps", note: "Compact for speech and music" },
+] satisfies ReadonlyArray<{
+  value: AudioQuality;
+  label: string;
+  note: string;
+}>;
+
 const defaultOptions: DownloadOptions = {
   mode: "video",
   quality: "best",
   audioFormat: "best",
+  audioQuality: "best",
   subtitleLanguages: [],
   writeSubtitles: false,
   writeAutomaticSubtitles: false,
@@ -218,12 +246,20 @@ export function DownloadView() {
       const scope = probe.playlistCount
         ? `all ${probe.playlistCount} items`
         : "the full collection";
-      const approved = await confirm(`This will download ${scope}. Continue?`, {
-        title: "Download the full playlist?",
-        kind: "warning",
-        okLabel: "Download all",
-        cancelLabel: "Go back",
-      });
+      let approved: boolean;
+      try {
+        approved = await confirm(`This will download ${scope}. Continue?`, {
+          title: "Download the full playlist?",
+          kind: "warning",
+          okLabel: "Download all",
+          cancelLabel: "Go back",
+        });
+      } catch {
+        setSubmitError(
+          "Playlist confirmation unavailable. Please try the download again.",
+        );
+        return;
+      }
       if (!approved) return;
     }
     const kind = startImmediately ? "now" : "queue";
@@ -667,30 +703,87 @@ export function DownloadView() {
             )}
 
             {options.mode === "audio" && (
-              <div className="field-row">
+              <div className="audio-options">
                 <label className="field">
                   <span>Audio format</span>
                   <select
                     value={options.audioFormat}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const format = audioFormatOptions.find(
+                        (option) => option.value === event.target.value,
+                      )?.value;
+                      if (!format) return;
                       setOptions({
                         ...options,
-                        audioFormat: event.target
-                          .value as DownloadOptions["audioFormat"],
-                      })
-                    }
+                        audioFormat: format,
+                        audioQuality:
+                          format === "best" ||
+                          format === "flac" ||
+                          format === "wav"
+                            ? "best"
+                            : options.audioQuality,
+                      });
+                    }}
                   >
-                    <option value="best">Source audio — no conversion</option>
-                    <option value="mp3">MP3 — broad compatibility</option>
-                    <option value="m4a">M4A — AAC in an MP4 container</option>
-                    <option value="opus">Opus — compact, high quality</option>
-                    <option value="flac">FLAC — lossless</option>
-                    <option value="wav">WAV — uncompressed</option>
+                    {audioFormatOptions.map((format) => (
+                      <option key={format.value} value={format.value}>
+                        {format.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
+
+                <div className="audio-quality-heading">
+                  <span>Audio quality</span>
+                  <small>
+                    {options.audioFormat === "best"
+                      ? "Source audio keeps its original quality."
+                      : options.audioFormat === "flac" ||
+                          options.audioFormat === "wav"
+                        ? "Lossless formats do not use a target bitrate."
+                        : "Applied while FFmpeg converts the audio."}
+                  </small>
+                </div>
+                <div
+                  className="choice-grid"
+                  role="radiogroup"
+                  aria-label="Audio quality"
+                >
+                  {audioQualityOptions.map((quality) => {
+                    const disabled =
+                      options.audioFormat === "best" ||
+                      options.audioFormat === "flac" ||
+                      options.audioFormat === "wav";
+                    return (
+                      <label
+                        className={`choice-card ${options.audioQuality === quality.value ? "choice-card--selected" : ""} ${disabled ? "choice-card--disabled" : ""}`}
+                        key={quality.value}
+                      >
+                        <input
+                          type="radio"
+                          name="audio-quality"
+                          value={quality.value}
+                          checked={options.audioQuality === quality.value}
+                          disabled={disabled}
+                          onChange={() =>
+                            setOptions({
+                              ...options,
+                              audioQuality: quality.value,
+                            })
+                          }
+                        />
+                        <span>
+                          <strong>{quality.label}</strong>
+                          <small>{quality.note}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
                 {options.audioFormat !== "best" && (
                   <p className="field-callout">
-                    FFmpeg is required to convert audio.
+                    FFmpeg is included and will convert the audio locally.
                   </p>
                 )}
               </div>

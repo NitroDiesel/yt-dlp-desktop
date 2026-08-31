@@ -210,7 +210,9 @@ fn job_from_row(row: &sqlx::sqlite::SqliteRow) -> AppResult<DownloadJob> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{DownloadOptions, DownloadProgress, DownloadRequest, MediaMode};
+    use crate::domain::{
+        AudioFormat, AudioQuality, DownloadOptions, DownloadProgress, DownloadRequest, MediaMode,
+    };
 
     fn job(status: JobStatus) -> DownloadJob {
         DownloadJob {
@@ -227,7 +229,8 @@ mod tests {
                 options: DownloadOptions {
                     mode: MediaMode::Video,
                     quality: "best".into(),
-                    audio_format: "best".into(),
+                    audio_format: AudioFormat::Best,
+                    audio_quality: AudioQuality::Best,
                     subtitle_languages: vec![],
                     write_subtitles: false,
                     write_automatic_subtitles: false,

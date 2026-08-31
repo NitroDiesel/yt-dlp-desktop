@@ -111,12 +111,75 @@ pub struct ClipOptions {
     pub precise: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AudioFormat {
+    #[default]
+    #[serde(rename = "best")]
+    Best,
+    #[serde(rename = "mp3")]
+    Mp3,
+    #[serde(rename = "m4a")]
+    M4a,
+    #[serde(rename = "opus")]
+    Opus,
+    #[serde(rename = "flac")]
+    Flac,
+    #[serde(rename = "wav")]
+    Wav,
+}
+
+impl AudioFormat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Best => "best",
+            Self::Mp3 => "mp3",
+            Self::M4a => "m4a",
+            Self::Opus => "opus",
+            Self::Flac => "flac",
+            Self::Wav => "wav",
+        }
+    }
+
+    pub fn supports_bitrate(self) -> bool {
+        matches!(self, Self::Mp3 | Self::M4a | Self::Opus)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AudioQuality {
+    #[default]
+    #[serde(rename = "best")]
+    Best,
+    #[serde(rename = "320K")]
+    Kbps320,
+    #[serde(rename = "256K")]
+    Kbps256,
+    #[serde(rename = "192K")]
+    Kbps192,
+    #[serde(rename = "128K")]
+    Kbps128,
+}
+
+impl AudioQuality {
+    pub fn as_yt_dlp_value(self) -> &'static str {
+        match self {
+            Self::Best => "0",
+            Self::Kbps320 => "320K",
+            Self::Kbps256 => "256K",
+            Self::Kbps192 => "192K",
+            Self::Kbps128 => "128K",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadOptions {
     pub mode: MediaMode,
     pub quality: String,
-    pub audio_format: String,
+    pub audio_format: AudioFormat,
+    #[serde(default)]
+    pub audio_quality: AudioQuality,
     pub subtitle_languages: Vec<String>,
     pub write_subtitles: bool,
     pub write_automatic_subtitles: bool,
@@ -362,6 +425,7 @@ mod tests {
             "customArguments": []
         });
         let options: DownloadOptions = serde_json::from_value(value).unwrap();
+        assert_eq!(options.audio_quality, AudioQuality::Best);
         assert!(options.clip.is_none());
         assert!(options.video_conversion.is_none());
     }
@@ -389,6 +453,7 @@ mod tests {
         });
         let request: DownloadRequest = serde_json::from_value(value).unwrap();
         assert!(!request.is_playlist);
+        assert_eq!(request.options.audio_quality, AudioQuality::Best);
         assert!(request.options.clip.is_none());
         assert!(request.options.video_conversion.is_none());
     }
