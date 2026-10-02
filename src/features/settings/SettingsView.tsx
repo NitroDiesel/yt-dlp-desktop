@@ -1,89 +1,152 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  Check,
-  CircleAlert,
-  Cpu,
-  FileCog,
-  FolderOpen,
-  RefreshCw,
-  Save,
-  ShieldCheck,
-  SlidersHorizontal,
-  Undo2,
-  Zap,
-} from "lucide-react";
+import { FileCog, FolderOpen, RefreshCw, Undo2 } from "lucide-react";
 import { useAppStore } from "../../app/store";
-import type { AppSettings, DependencyInfo } from "../../types/contracts";
+import { Toggle } from "../../components/Toggle";
+import type {
+  AppSettings,
+  DependencyInfo,
+  HardwareAccelerationInfo,
+} from "../../types/contracts";
 
-function DependencyCard({ dependency }: { dependency: DependencyInfo }) {
-  const ready = dependency.status === "available";
-  const labels: Record<DependencyInfo["kind"], string> = {
-    yt_dlp: "yt-dlp",
-    ffmpeg: "FFmpeg",
-    ffprobe: "FFprobe",
-    javascript_runtime: "JavaScript runtime",
-  };
+const toolLabels: Record<DependencyInfo["kind"], string> = {
+  yt_dlp: "yt-dlp",
+  ffmpeg: "FFmpeg",
+  ffprobe: "FFprobe",
+  javascript_runtime: "Deno",
+};
+
+function Section({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  const id = `settings-${title.toLowerCase().replace(/\W+/g, "-")}`;
   return (
-    <article className="dependency-card">
-      <span
-        className={`dependency-icon ${ready ? "dependency-icon--ready" : ""}`}
-      >
-        {ready ? (
-          <Check aria-hidden="true" />
-        ) : (
-          <CircleAlert aria-hidden="true" />
-        )}
-      </span>
-      <div>
-        <div className="dependency-card__title">
-          <h3>{labels[dependency.kind]}</h3>
-          <span className={`source-badge source-badge--${dependency.source}`}>
-            {dependency.source === "bundled"
-              ? "Bundled"
-              : dependency.source.replaceAll("_", " ")}
-          </span>
+    <section className="settings-section" aria-labelledby={id}>
+      <header className="settings-section__header">
+        <div>
+          <h2 id={id}>{title}</h2>
+          {description && <p>{description}</p>}
         </div>
-        <p>
-          {ready
-            ? dependency.version || "Available"
-            : dependency.message || "Not found"}
-        </p>
-        {ready && dependency.message && (
-          <span className="dependency-card__note">{dependency.message}</span>
-        )}
-        <small>
-          {dependency.path ||
-            (dependency.kind === "javascript_runtime"
-              ? "The bundled JavaScript runtime could not be found"
-              : "The packaged executable could not be found")}
-        </small>
-      </div>
-    </article>
+        {action}
+      </header>
+      <div className="settings-group">{children}</div>
+    </section>
   );
 }
 
+function Row({
+  title,
+  description,
+  control,
+  children,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  control?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="settings-row">
+      <div className="settings-row__main">
+        <div className="settings-row__text">
+          <h3>{title}</h3>
+          {description && <p>{description}</p>}
+        </div>
+        {control && <div className="settings-row__control">{control}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ToolRow({ dependency }: { dependency: DependencyInfo }) {
+  const ready = dependency.status === "available";
+  return (
+    <Row
+      title={
+        <>
+          {toolLabels[dependency.kind]}
+          <span className={`tag ${ready ? "" : "tag--error"}`}>
+            {ready
+              ? dependency.source === "custom"
+                ? "Custom"
+                : "Bundled"
+              : dependency.status === "missing"
+                ? "Missing"
+                : "Not working"}
+          </span>
+        </>
+      }
+      description={
+        <>
+          {dependency.message && (
+            <span className="settings-row__note">{dependency.message}</span>
+          )}
+          <span className="mono settings-row__path" title={dependency.path}>
+            {dependency.path ?? "No executable found"}
+          </span>
+        </>
+      }
+      control={
+        dependency.version && (
+          <span className="mono settings-row__value">
+            {dependency.version.match(/\d[\w.-]*/)?.[0] ?? dependency.version}
+          </span>
+        )
+      }
+    />
+  );
+}
+
+const codecNames = { h264: "H.264", hevc: "HEVC", av1: "AV1" } as const;
+
+function gpuSummary(hardware?: HardwareAccelerationInfo): string {
+  if (!hardware || hardware.status === "checking") return "Checking…";
+  const ready = hardware.encoders.filter((encoder) => encoder.available);
+  if (ready.length === 0) return "Not available";
+  const providers = new Set(
+    ready.map((encoder) => (encoder.provider === "nvenc" ? "NVIDIA NVENC" : "AMD AMF")),
+  );
+  return [...providers].join(" and ");
+}
+
 export function SettingsView() {
-  const {
-    settings,
-    dependencies,
-    hardwareAcceleration,
-    saveSettings,
-    refreshEngineStatus,
-  } = useAppStore();
+  const { settings, dependencies, hardwareAcceleration } = useAppStore(
+    useShallow((state) => ({
+      settings: state.settings,
+      dependencies: state.dependencies,
+      hardwareAcceleration: state.hardwareAcceleration,
+    })),
+  );
+  const saveSettings = useAppStore((state) => state.saveSettings);
+  const refreshEngineStatus = useAppStore((state) => state.refreshEngineStatus);
+  const ensureHardwareAcceleration = useAppStore(
+    (state) => state.ensureHardwareAcceleration,
+  );
   const [draft, setDraft] = useState<AppSettings | undefined>(settings);
-  const [saveState, setSaveState] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => setDraft(settings), [settings]);
-  if (!draft) return null;
-  const activeDraft = draft;
-  const detectedEncoders =
+  useEffect(() => ensureHardwareAcceleration(), [ensureHardwareAcceleration]);
+  if (!draft || !settings) return null;
+  const current = draft;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
+  const readyEncoders =
     hardwareAcceleration?.encoders.filter((encoder) => encoder.available) ?? [];
+  const gpuDecode = readyEncoders.some((encoder) => encoder.decodeAvailable);
 
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-    setDraft({ ...draft, [key]: value });
+    setDraft({ ...current, [key]: value });
     setSaveState("idle");
   };
 
@@ -91,7 +154,7 @@ export function SettingsView() {
     const value = await open({
       directory: true,
       multiple: false,
-      defaultPath: activeDraft.downloadDirectory || undefined,
+      defaultPath: current.downloadDirectory || undefined,
     });
     if (value) set("downloadDirectory", value);
   }
@@ -100,19 +163,12 @@ export function SettingsView() {
     const value = await open({
       directory: false,
       multiple: false,
-      title: `Choose ${kind.replaceAll("_", " ")} executable`,
+      title: `Choose the ${toolLabels[kind]} executable`,
     });
     if (!value) return;
     if (kind === "yt_dlp") set("ytDlpPath", value);
-    if (kind === "ffmpeg" || kind === "ffprobe") set("ffmpegPath", value);
+    if (kind === "ffmpeg") set("ffmpegPath", value);
     if (kind === "javascript_runtime") set("denoPath", value);
-  }
-
-  function resetToBundledExecutable(kind: DependencyInfo["kind"]) {
-    if (kind === "yt_dlp") set("ytDlpPath", undefined);
-    if (kind === "ffmpeg" || kind === "ffprobe")
-      set("ffmpegPath", undefined);
-    if (kind === "javascript_runtime") set("denoPath", undefined);
   }
 
   async function chooseCookieFile() {
@@ -127,96 +183,74 @@ export function SettingsView() {
   async function save() {
     setSaveState("saving");
     try {
-      await saveSettings(activeDraft);
-      setSaveState("saved");
+      await saveSettings(current);
+      setSaveState("idle");
     } catch {
       setSaveState("error");
     }
   }
 
-  return (
-    <div className="view settings-view">
-      <header className="view-header view-header--actions">
-        <div>
-          <p className="eyebrow">PREFERENCES</p>
-          <h1>Settings</h1>
-          <p>Defaults stay local to this computer.</p>
-        </div>
-        <button
-          className="button button--primary"
-          onClick={() => void save()}
-          disabled={saveState === "saving"}
-        >
-          <Save aria-hidden="true" />
-          {saveState === "saving"
-            ? "Saving…"
-            : saveState === "saved"
-              ? "Saved"
-              : "Save changes"}
-        </button>
-      </header>
-      {saveState === "error" && (
-        <div className="inline-message inline-message--error" role="alert">
-          <CircleAlert aria-hidden="true" />
-          <p>
-            Settings could not be saved. Check the technical log and try again.
-          </p>
-        </div>
-      )}
+  async function checkAgain() {
+    setChecking(true);
+    try {
+      await refreshEngineStatus();
+    } finally {
+      setChecking(false);
+    }
+  }
 
-      <section
-        className="settings-section"
-        aria-labelledby="downloads-settings"
-      >
-        <div className="settings-section__intro">
-          <h2 id="downloads-settings">Downloads</h2>
-          <p>
-            Choose safe defaults for new jobs. Each download can still override
-            these.
-          </p>
-        </div>
-        <div className="settings-panel">
-          <label className="field field--button">
-            <span>Default folder</span>
-            <button
-              className="path-picker"
-              onClick={() => void chooseDirectory()}
-            >
-              <FolderOpen aria-hidden="true" />
-              <strong>{draft.downloadDirectory || "Choose a folder"}</strong>
-            </button>
-          </label>
-          <label className="field">
-            <span>Filename template</span>
+  const overrides = [
+    { kind: "yt_dlp" as const, label: "yt-dlp", path: draft.ytDlpPath, key: "ytDlpPath" as const },
+    { kind: "ffmpeg" as const, label: "FFmpeg and FFprobe", path: draft.ffmpegPath, key: "ffmpegPath" as const },
+    { kind: "javascript_runtime" as const, label: "Deno", path: draft.denoPath, key: "denoPath" as const },
+  ];
+
+  return (
+    <div className="page">
+      <header className="topbar">
+        <h1>Settings</h1>
+      </header>
+      <div className="settings">
+        <Section title="Downloads" description="Defaults for new downloads. Each download can still change them.">
+          <Row
+            title="Default folder"
+            description="Used until you pick another folder for a download."
+            control={
+              <button type="button" className="button button--outline path-button" onClick={() => void chooseDirectory()}>
+                <FolderOpen aria-hidden="true" />
+                <span className="mono">{draft.downloadDirectory || "Choose a folder"}</span>
+              </button>
+            }
+          />
+          <Row
+            title="File name"
+            description="A yt-dlp output template. Folders and absolute paths aren't allowed."
+          >
             <input
+              className="mono settings-row__input"
+              aria-label="Filename template"
               value={draft.filenameTemplate}
               onChange={(event) => set("filenameTemplate", event.target.value)}
             />
-            <small>
-              yt-dlp template fields are supported. Path separators and absolute
-              paths are rejected.
-            </small>
-          </label>
-          <div className="field-grid">
-            <label className="field">
-              <span>Default mode</span>
+          </Row>
+          <Row
+            title="Default type"
+            control={
               <select
+                aria-label="Default type"
                 value={draft.defaultMode}
-                onChange={(event) =>
-                  set(
-                    "defaultMode",
-                    event.target.value as AppSettings["defaultMode"],
-                  )
-                }
+                onChange={(event) => set("defaultMode", event.target.value as AppSettings["defaultMode"])}
               >
                 <option value="video">Video</option>
                 <option value="audio">Audio</option>
-                <option value="custom">Exact format</option>
               </select>
-            </label>
-            <label className="field">
-              <span>Default quality</span>
+            }
+          />
+          <Row
+            title="Default video quality"
+            control={
               <select
+                aria-label="Default video quality"
                 value={draft.defaultQuality}
                 onChange={(event) => set("defaultQuality", event.target.value)}
               >
@@ -227,111 +261,313 @@ export function SettingsView() {
                 <option value="720">Up to 720p</option>
                 <option value="single">Best single file</option>
               </select>
-            </label>
-          </div>
-          <label className="field">
-            <span>Simultaneous downloads: {draft.queueConcurrency}</span>
-            <input
-              type="range"
-              min="1"
-              max="4"
-              value={draft.queueConcurrency}
-              onChange={(event) =>
-                set("queueConcurrency", Number(event.target.value))
-              }
+            }
+          />
+          <Row
+            title="Downloads at once"
+            description="More parallel downloads use more bandwidth and can trigger site rate limits."
+            control={
+              <select
+                aria-label="Downloads at once"
+                value={draft.queueConcurrency}
+                onChange={(event) => set("queueConcurrency", Number(event.target.value))}
+              >
+                {[1, 2, 3, 4].map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            }
+          />
+          <div className="settings-row">
+            <Toggle
+              label="Date files by download time"
+              description="Off: files carry the video's upload date, as yt-dlp does by default."
+              checked={Boolean(draft.useDownloadTime)}
+              onChange={(checked) => set("useDownloadTime", checked)}
             />
-            <small>
-              One is safest. Higher values use more bandwidth and may trigger
-              site limits.
-            </small>
-          </label>
-        </div>
-      </section>
+          </div>
+        </Section>
 
-      <section className="settings-section" aria-labelledby="engine-settings">
-        <div className="settings-section__intro">
-          <h2 id="engine-settings">Download engine</h2>
-          <p>
-            The exact executable, version, and source are always visible. No
-            binary is run silently from the working folder.
-          </p>
-          <button
-            className="button button--quiet"
-            onClick={() => void refreshEngineStatus()}
-          >
-            <RefreshCw aria-hidden="true" /> Check again
-          </button>
-        </div>
-        <div className="settings-panel engine-panel">
-          <div className="dependency-list">
-            {dependencies.map((dependency) => (
-              <DependencyCard
-                key={dependency.kind}
-                dependency={dependency}
+        <Section title="Network" description="Cookie contents are never copied into the app.">
+          <Row
+            title="Retries"
+            description="Attempts for a whole download, then for each fragment."
+            control={
+              <div className="number-pair">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  aria-label="Retries"
+                  value={draft.retries}
+                  onChange={(event) => set("retries", Number(event.target.value))}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  aria-label="Fragment retries"
+                  value={draft.fragmentRetries}
+                  onChange={(event) => set("fragmentRetries", Number(event.target.value))}
+                />
+              </div>
+            }
+          />
+          <Row
+            title="Speed limit"
+            description="Leave empty for no limit."
+            control={
+              <input
+                className="mono input--narrow"
+                aria-label="Rate limit"
+                placeholder="5M"
+                value={draft.rateLimit ?? ""}
+                onChange={(event) => set("rateLimit", event.target.value || undefined)}
               />
-            ))}
+            }
+          />
+          <Row title="Proxy" description="A URL without a username or password; credentials aren't stored.">
+            <input
+              className="mono settings-row__input"
+              type="url"
+              autoComplete="off"
+              aria-label="Proxy"
+              placeholder="socks5://127.0.0.1:1080"
+              value={draft.proxy ?? ""}
+              onChange={(event) => set("proxy", event.target.value || undefined)}
+            />
+          </Row>
+          <Row
+            title="Browser cookies"
+            description="Lets yt-dlp read a signed-in browser session for private or age-restricted media."
+            control={
+              <select
+                aria-label="Browser cookies"
+                value={draft.cookieBrowser ?? ""}
+                onChange={(event) => set("cookieBrowser", event.target.value || undefined)}
+              >
+                <option value="">None</option>
+                {["chrome", "edge", "firefox", "brave", "chromium", "opera", "vivaldi", "safari"].map((browser) => (
+                  <option key={browser} value={browser}>
+                    {browser[0].toUpperCase() + browser.slice(1)}
+                  </option>
+                ))}
+              </select>
+            }
+          />
+          <Row
+            title="Cookie file"
+            description="A Netscape-format cookies.txt."
+            control={
+              <div className="control-pair">
+                {draft.cookieFile && (
+                  <button type="button" className="button button--ghost button--compact" onClick={() => set("cookieFile", undefined)}>
+                    Clear
+                  </button>
+                )}
+                <button type="button" className="button button--outline path-button" onClick={() => void chooseCookieFile()}>
+                  <FileCog aria-hidden="true" />
+                  <span className="mono">{draft.cookieFile || "Choose file"}</span>
+                </button>
+              </div>
+            }
+          />
+          <Row
+            title="Browser impersonation"
+            description="Some sites block downloaders. This makes requests look like the chosen browser."
+            control={
+              <select
+                aria-label="Browser impersonation"
+                value={draft.impersonate ?? ""}
+                onChange={(event) =>
+                  set("impersonate", (event.target.value || undefined) as AppSettings["impersonate"])
+                }
+              >
+                <option value="">Off</option>
+                <option value="chrome">Chrome</option>
+                <option value="edge">Edge</option>
+                <option value="safari">Safari</option>
+                <option value="firefox">Firefox</option>
+              </select>
+            }
+          />
+          <Row
+            title="Region"
+            description="Ask sites to treat you as being in another country, for region-locked media."
+            control={
+              <div className="control-pair">
+                <select
+                  aria-label="Region bypass"
+                  value={
+                    draft.geoBypass === undefined || draft.geoBypass === "default" || draft.geoBypass === "never"
+                      ? (draft.geoBypass ?? "")
+                      : "country"
+                  }
+                  onChange={(event) =>
+                    set(
+                      "geoBypass",
+                      event.target.value === "country" ? "US" : event.target.value || undefined,
+                    )
+                  }
+                >
+                  <option value="">Automatic</option>
+                  <option value="never">Off</option>
+                  <option value="country">Specific country</option>
+                </select>
+                {draft.geoBypass !== undefined && !["default", "never"].includes(draft.geoBypass) && (
+                  <input
+                    className="mono input--narrow"
+                    aria-label="Country code"
+                    maxLength={2}
+                    value={draft.geoBypass}
+                    onChange={(event) => set("geoBypass", event.target.value.toUpperCase())}
+                  />
+                )}
+              </div>
+            }
+          />
+          <Row
+            title="IP version"
+            description="Force IPv4 or IPv6 when a site misbehaves on one of them."
+            control={
+              <select
+                aria-label="IP version"
+                value={draft.ipVersion ?? ""}
+                onChange={(event) =>
+                  set("ipVersion", (event.target.value || undefined) as AppSettings["ipVersion"])
+                }
+              >
+                <option value="">Automatic</option>
+                <option value="ipv4">IPv4 only</option>
+                <option value="ipv6">IPv6 only</option>
+              </select>
+            }
+          />
+          <Row
+            title="Timeout"
+            description="How long to wait for a server before giving up."
+            control={
+              <select
+                aria-label="Network timeout"
+                value={String(draft.socketTimeout ?? "")}
+                onChange={(event) =>
+                  set("socketTimeout", event.target.value ? Number(event.target.value) : undefined)
+                }
+              >
+                <option value="">Default (20 seconds)</option>
+                <option value="10">10 seconds</option>
+                <option value="60">1 minute</option>
+                <option value="180">3 minutes</option>
+              </select>
+            }
+          />
+          <Row
+            title="Pause between requests"
+            description="Slows analysis and downloads slightly to avoid site rate limits."
+            control={
+              <select
+                aria-label="Pause between requests"
+                value={String(draft.sleepRequests ?? 0)}
+                onChange={(event) => set("sleepRequests", Number(event.target.value) || undefined)}
+              >
+                <option value="0">No pause</option>
+                <option value="1">1 second</option>
+                <option value="3">3 seconds</option>
+                <option value="10">10 seconds</option>
+              </select>
+            }
+          />
+          <Row
+            title="Download in chunks"
+            description="Splits large files into smaller requests, which some sites throttle less."
+            control={
+              <select
+                aria-label="Chunk size"
+                value={String(draft.httpChunkSizeMb ?? "")}
+                onChange={(event) =>
+                  set("httpChunkSizeMb", event.target.value ? Number(event.target.value) : undefined)
+                }
+              >
+                <option value="">Off</option>
+                <option value="10">10 MB</option>
+                <option value="50">50 MB</option>
+              </select>
+            }
+          />
+          <Row
+            title="Retries while reading a page"
+            description="Extra attempts when a site's page fails to load during analysis."
+            control={
+              <input
+                type="number"
+                min="0"
+                max="100"
+                className="input--narrow"
+                aria-label="Extractor retries"
+                placeholder="3"
+                value={draft.extractorRetries ?? ""}
+                onChange={(event) =>
+                  set("extractorRetries", event.target.value ? Number(event.target.value) : undefined)
+                }
+              />
+            }
+          />
+          <div className="settings-row">
+            <Toggle
+              label="Legacy server connections"
+              description="Allows older HTTPS servers that newer security defaults refuse."
+              checked={Boolean(draft.legacyServerConnect)}
+              onChange={(checked) => set("legacyServerConnect", checked)}
+            />
           </div>
-          <div className="legal-note">
-            <ShieldCheck aria-hidden="true" />
-            <p>
-              <strong>
-                yt-dlp, FFmpeg, FFprobe, and Deno are included with the app.
-              </strong>{" "}
-              Every release pins and checksum-verifies its binaries. Custom
-              overrides remain available for experts; a normal installation
-              needs no separate tools.
-            </p>
-          </div>
-          <details className="engine-overrides">
+        </Section>
+
+        <Section
+          title="Download engine"
+          description="Bundled, version-pinned tools. Nothing else needs to be installed."
+          action={
+            <button
+              type="button"
+              className="button button--ghost button--compact"
+              disabled={checking}
+              onClick={() => void checkAgain()}
+            >
+              <RefreshCw aria-hidden="true" /> {checking ? "Checking…" : "Check again"}
+            </button>
+          }
+        >
+          {dependencies.map((dependency) => (
+            <ToolRow key={dependency.kind} dependency={dependency} />
+          ))}
+          <details className="settings-row settings-disclosure">
             <summary>
-              <SlidersHorizontal aria-hidden="true" />
-              <span>
-                <strong>Custom tool overrides</strong>
-                <small>Optional controls for advanced installations</small>
+              <span className="settings-row__text">
+                <h3>Custom tool overrides</h3>
+                <p>For advanced setups. Replacements run with the app's permissions.</p>
               </span>
             </summary>
-            <div className="engine-overrides__body">
-              {(
-                [
-                  {
-                    kind: "yt_dlp" as const,
-                    label: "yt-dlp",
-                    path: draft.ytDlpPath,
-                  },
-                  {
-                    kind: "ffmpeg" as const,
-                    label: "FFmpeg and FFprobe",
-                    path: draft.ffmpegPath,
-                  },
-                  {
-                    kind: "javascript_runtime" as const,
-                    label: "JavaScript runtime",
-                    path: draft.denoPath,
-                  },
-                ] satisfies Array<{
-                  kind: DependencyInfo["kind"];
-                  label: string;
-                  path?: string;
-                }>
-              ).map((override) => (
-                <div className="engine-override-row" key={override.kind}>
+            <div className="override-list">
+              {overrides.map((override) => (
+                <div className="override" key={override.kind}>
                   <span>
                     <strong>{override.label}</strong>
-                    <small>{override.path || "Using the bundled tool"}</small>
+                    <span className="mono">{override.path || "Bundled"}</span>
                   </span>
-                  <div>
+                  <div className="control-pair">
                     {override.path && (
                       <button
                         type="button"
-                        className="button button--quiet"
-                        onClick={() => resetToBundledExecutable(override.kind)}
+                        className="button button--ghost button--compact"
+                        onClick={() => set(override.key, undefined)}
                       >
                         <Undo2 aria-hidden="true" /> Use bundled
                       </button>
                     )}
                     <button
                       type="button"
-                      className="button button--secondary"
+                      className="button button--outline button--compact"
                       onClick={() => void chooseExecutable(override.kind)}
                     >
                       Select replacement
@@ -339,270 +575,84 @@ export function SettingsView() {
                   </div>
                 </div>
               ))}
-              <p className="engine-overrides__help">
-                Replacements execute with the same access as the app. Only use
-                files you trust. FFprobe is selected from the same folder as
-                FFmpeg.
-              </p>
             </div>
           </details>
-        </div>
-      </section>
+        </Section>
 
-      <section className="settings-section" aria-labelledby="gpu-settings">
-        <div className="settings-section__intro">
-          <h2 id="gpu-settings">GPU acceleration</h2>
-          <p>
-            The app tests the bundled engine against the installed GPU driver,
-            then selects NVIDIA NVENC or AMD AMF automatically.
-          </p>
-        </div>
-        <div className="settings-panel acceleration-panel">
-          <div className="acceleration-summary">
-            <span
-              className={`acceleration-summary__icon ${
-                hardwareAcceleration?.status === "available"
-                  ? "acceleration-summary__icon--ready"
-                  : ""
-              }`}
-            >
-              <Zap aria-hidden="true" />
-            </span>
-            <div>
-              <div className="dependency-card__title">
-                <h3>Automatic hardware encoder</h3>
-                <span
-                  className={`source-badge ${
-                    hardwareAcceleration?.status === "available"
-                      ? "source-badge--bundled"
-                      : "source-badge--not_found"
-                  }`}
-                >
-                  {hardwareAcceleration?.status === "available"
-                    ? "Ready"
-                    : "Unavailable"}
-                </span>
-              </div>
-              <p>
-                {hardwareAcceleration?.message ??
-                  "Run the engine check to inspect GPU capabilities."}
-              </p>
-            </div>
-          </div>
-          <div className="capability-grid" aria-label="GPU codec support">
-            {detectedEncoders.map((encoder) => (
-              <div
-                className="capability-row"
-                key={`${encoder.provider}-${encoder.codec}`}
-              >
-                <span>
-                  {encoder.provider === "nvenc" ? "NVIDIA NVENC" : "AMD AMF"}{" "}
-                  ·{" "}
-                  {encoder.codec === "h264"
-                    ? "H.264"
-                    : encoder.codec === "hevc"
-                      ? "HEVC"
-                      : "AV1"}
-                </span>
-                <strong
-                  className={
-                    encoder.available
-                      ? "capability-state--ready"
-                      : "capability-state--muted"
-                  }
-                >
-                  {encoder.available
-                    ? "Hardware ready"
-                    : encoder.compiled
-                      ? "GPU or driver unsupported"
-                      : "Not in this build"}
-                </strong>
-              </div>
-            ))}
-            {detectedEncoders.length === 0 && (
-              <div className="capability-row">
-                <span>Detected hardware encoders</span>
-                <strong className="capability-state--muted">
-                  None — software path remains available
-                </strong>
-              </div>
-            )}
-            <div className="capability-row">
-              <span>
-                <Cpu aria-hidden="true" /> GPU decoding
-              </span>
-              <strong
-                className={
-                  hardwareAcceleration?.encoders.some(
-                    (encoder) => encoder.decodeAvailable,
-                  )
-                    ? "capability-state--ready"
-                    : "capability-state--muted"
-                }
-              >
-                {hardwareAcceleration?.encoders.some(
-                  (encoder) => encoder.decodeAvailable,
-                )
-                  ? "Hardware ready"
-                  : "Software fallback"}
-              </strong>
-            </div>
-          </div>
-          <p className="acceleration-footnote">
-            GPU drivers are supplied by NVIDIA or AMD, not bundled with the
-            app. If neither runtime probe succeeds, conversion stays off and
-            normal yt-dlp downloads continue with no extra setup.
-          </p>
-        </div>
-      </section>
-
-      <section className="settings-section" aria-labelledby="network-settings">
-        <div className="settings-section__intro">
-          <h2 id="network-settings">Network & access</h2>
-          <p>Cookie contents are never copied into the app database.</p>
-        </div>
-        <div className="settings-panel">
-          <div className="field-grid">
-            <label className="field">
-              <span>Retries</span>
-              <input
-                type="number"
-                min="0"
-                max="50"
-                value={draft.retries}
-                onChange={(event) => set("retries", Number(event.target.value))}
-              />
-            </label>
-            <label className="field">
-              <span>Fragment retries</span>
-              <input
-                type="number"
-                min="0"
-                max="50"
-                value={draft.fragmentRetries}
-                onChange={(event) =>
-                  set("fragmentRetries", Number(event.target.value))
-                }
-              />
-            </label>
-          </div>
-          <label className="field">
-            <span>Rate limit</span>
-            <input
-              placeholder="For example: 5M"
-              value={draft.rateLimit ?? ""}
-              onChange={(event) =>
-                set("rateLimit", event.target.value || undefined)
-              }
-            />
-          </label>
-          <label className="field">
-            <span>Proxy</span>
-            <input
-              type="url"
-              autoComplete="off"
-              placeholder="socks5://127.0.0.1:1080"
-              value={draft.proxy ?? ""}
-              onChange={(event) =>
-                set("proxy", event.target.value || undefined)
-              }
-            />
-            <small>
-              Use a URL without credentials. Passwords are intentionally not
-              stored.
-            </small>
-          </label>
-          <div className="field-grid">
-            <label className="field">
-              <span>Browser cookies</span>
-              <select
-                value={draft.cookieBrowser ?? ""}
-                onChange={(event) =>
-                  set("cookieBrowser", event.target.value || undefined)
-                }
-              >
-                <option value="">None</option>
-                <option value="chrome">Chrome</option>
-                <option value="edge">Edge</option>
-                <option value="firefox">Firefox</option>
-                <option value="brave">Brave</option>
-                <option value="chromium">Chromium</option>
-                <option value="opera">Opera</option>
-                <option value="vivaldi">Vivaldi</option>
-                <option value="safari">Safari</option>
-              </select>
-            </label>
-            <label className="field field--button">
-              <span>Cookie file</span>
-              <button
-                type="button"
-                className="path-picker"
-                onClick={() => void chooseCookieFile()}
-              >
-                <FileCog aria-hidden="true" />
-                <strong>{draft.cookieFile || "Choose a cookie file"}</strong>
-              </button>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="settings-section"
-        aria-labelledby="appearance-settings"
-      >
-        <div className="settings-section__intro">
-          <h2 id="appearance-settings">Appearance</h2>
-          <p>Follow the system or choose a fixed theme.</p>
-        </div>
-        <div className="settings-panel">
-          <label className="field">
-            <span>Theme</span>
-            <select
-              value={draft.theme}
-              onChange={(event) =>
-                set("theme", event.target.value as AppSettings["theme"])
-              }
-            >
-              <option value="system">Use system setting</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </label>
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={draft.reducedMotion}
-              onChange={(event) => set("reducedMotion", event.target.checked)}
-            />
-            <span>
-              <strong>Reduce motion</strong>
-              <small>
-                Minimizes transitions and animated progress indicators.
-              </small>
-            </span>
-          </label>
-        </div>
-      </section>
-      <footer className="settings-footer">
-        <p>
-          {saveState === "saved"
-            ? "Your preferences are up to date."
-            : "Changes stay on this computer."}
-        </p>
-        <button
-          className="button button--primary button--large"
-          onClick={() => void save()}
-          disabled={saveState === "saving"}
+        <Section
+          title="GPU acceleration"
+          description="Detected from the bundled FFmpeg, your GPU, and its driver. Drivers come from NVIDIA or AMD."
         >
-          <Save aria-hidden="true" />
-          {saveState === "saving"
-            ? "Saving…"
-            : saveState === "saved"
-              ? "Saved"
-              : "Save changes"}
-        </button>
-      </footer>
+          <Row
+            title="Hardware encoder"
+            description={hardwareAcceleration?.message}
+            control={<span className="settings-row__value">{gpuSummary(hardwareAcceleration)}</span>}
+          />
+          {readyEncoders.length > 0 && (
+            <Row
+              title="Codecs"
+              control={
+                <span className="mono settings-row__value">
+                  {[...new Set(readyEncoders.map((encoder) => codecNames[encoder.codec]))].join(", ")}
+                </span>
+              }
+            />
+          )}
+          {readyEncoders.length > 0 && (
+            <Row
+              title="Hardware decoding"
+              description="Optional per download. When unavailable, the CPU reads the source and the GPU still encodes."
+              control={<span className="settings-row__value">{gpuDecode ? "Available" : "Not available"}</span>}
+            />
+          )}
+        </Section>
+
+        <Section title="Appearance">
+          <Row
+            title="Theme"
+            control={
+              <select
+                aria-label="Theme"
+                value={draft.theme}
+                onChange={(event) => set("theme", event.target.value as AppSettings["theme"])}
+              >
+                <option value="system">Match system</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            }
+          />
+          <div className="settings-row">
+            <Toggle
+              label="Reduce motion"
+              description="Turns off transitions."
+              checked={draft.reducedMotion}
+              onChange={(checked) => set("reducedMotion", checked)}
+            />
+          </div>
+        </Section>
+      </div>
+
+      {(dirty || saveState === "error") && (
+        <div className="save-strip" role="region" aria-label="Unsaved changes">
+          <p>
+            {saveState === "error"
+              ? "Settings couldn't be saved. Check the highlighted values and try again."
+              : "You have unsaved changes."}
+          </p>
+          <button type="button" className="button button--ghost" onClick={() => setDraft(settings)}>
+            Discard
+          </button>
+          <button
+            type="button"
+            className="button button--primary"
+            disabled={saveState === "saving"}
+            onClick={() => void save()}
+          >
+            {saveState === "saving" ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

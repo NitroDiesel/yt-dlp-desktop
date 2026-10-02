@@ -1,57 +1,113 @@
-import { Download, ListVideo, Pause, Play, Plus, Trash2 } from "lucide-react";
+import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { confirm } from "@tauri-apps/plugin-dialog";
+import { ClipboardPaste, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { useAppStore } from "../../app/store";
-import { EmptyState } from "../../components/EmptyState";
-import { JobCard } from "./JobCard";
+import {
+  filterFor,
+  filterLabels,
+  mergeDownloads,
+  type DownloadFilter,
+} from "../../lib/jobs";
+import { modifierKey } from "../../lib/platform";
+import { JobRow } from "./JobRow";
+
+const emptyCopy: Record<DownloadFilter, string> = {
+  all: "",
+  downloading: "Nothing is downloading or waiting right now.",
+  completed: "Finished downloads appear here. Removing one never deletes its file.",
+  stopped: "Failed, cancelled, and interrupted downloads appear here for retry.",
+};
+
+function EmptyDownloads({ filter }: { filter: DownloadFilter }) {
+  const openNewDownload = useAppStore((state) => state.openNewDownload);
+  if (filter !== "all") {
+    return <p className="list-empty">{emptyCopy[filter]}</p>;
+  }
+  return (
+    <section className="paste-target" aria-labelledby="paste-title">
+      <ClipboardPaste aria-hidden="true" />
+      <h2 id="paste-title">Paste a link to start</h2>
+      <p>
+        Copy a video, playlist, or channel link, then press{" "}
+        <kbd>{modifierKey}</kbd> <kbd>V</kbd> anywhere in this window.
+      </p>
+      <button
+        type="button"
+        className="button button--outline"
+        onClick={() => openNewDownload()}
+      >
+        <Plus aria-hidden="true" /> New download
+      </button>
+    </section>
+  );
+}
 
 export function QueueView() {
-  const {
-    queue,
-    queuePaused,
-    setPaused,
-    cancel,
-    retry,
-    removeQueueJob,
-    clearCompleted,
-    reorder,
-    setView,
-  } = useAppStore();
-  const activeCount = queue.filter((job) =>
-    ["analyzing", "downloading", "post_processing"].includes(job.status),
-  ).length;
-  const queuedCount = queue.filter((job) => job.status === "queued").length;
-  const hasCompleted = queue.some((job) => job.status === "completed");
+  const { filter, queue, history, queuePaused, selectedId } = useAppStore(
+    useShallow((state) => ({
+      filter: state.filter,
+      queue: state.queue,
+      history: state.history,
+      queuePaused: state.queuePaused,
+      selectedId:
+        state.inspector?.kind === "job" ? state.inspector.id : undefined,
+    })),
+  );
+  const { selectJob, cancel, retry, removeJob, setPaused, clearCompleted } =
+    useAppStore(
+      useShallow((state) => ({
+        selectJob: state.selectJob,
+        cancel: state.cancel,
+        retry: state.retry,
+        removeJob: state.removeJob,
+        setPaused: state.setPaused,
+        clearCompleted: state.clearCompleted,
+      })),
+    );
+
+  const jobs = useMemo(() => {
+    const all = mergeDownloads(queue, history);
+    return filter === "all"
+      ? all
+      : all.filter((job) => filterFor(job.status) === filter);
+  }, [queue, history, filter]);
+
+  async function confirmClearCompleted() {
+    const count = jobs.length;
+    const approved = await confirm(
+      `Remove ${count} completed ${count === 1 ? "download" : "downloads"} from the list? The files stay on your computer.`,
+      {
+        title: "Clear completed downloads",
+        kind: "info",
+        okLabel: "Clear list",
+        cancelLabel: "Keep",
+      },
+    ).catch(() => false);
+    if (approved) await clearCompleted();
+  }
 
   return (
-    <div className="view view--queue">
-      <header className="view-header view-header--actions">
-        <div>
-          <p className="eyebrow">DOWNLOAD MANAGER</p>
-          <h1>Downloads</h1>
-          <p>
-            {activeCount > 0
-              ? `${activeCount} active · ${queuedCount} waiting`
-              : queuedCount > 0
-                ? `${queuedCount} waiting`
-                : "Nothing in motion"}
-          </p>
-        </div>
-        <div className="header-actions">
-          <button
-            className="button button--primary"
-            onClick={() => setView("download")}
-          >
-            <Plus aria-hidden="true" /> New download
-          </button>
-          {hasCompleted && (
+    <div className="page">
+      <header className="downloads-header">
+        <h1>
+          {filterLabels[filter]}
+          <span className="count-badge">{jobs.length}</span>
+        </h1>
+        <div className="topbar__actions">
+          {filter === "completed" && jobs.length > 0 && (
             <button
-              className="button button--quiet"
-              onClick={() => void clearCompleted()}
+              type="button"
+              className="button button--ghost"
+              onClick={() => void confirmClearCompleted()}
             >
-              <Trash2 aria-hidden="true" /> Clear completed
+              <Trash2 aria-hidden="true" /> Clear list
             </button>
           )}
           <button
-            className="button button--secondary"
+            type="button"
+            className="button button--ghost"
+            aria-pressed={queuePaused}
             onClick={() => void setPaused(!queuePaused)}
           >
             {queuePaused ? (
@@ -64,46 +120,33 @@ export function QueueView() {
         </div>
       </header>
 
-      {queuePaused && (
-        <div className="queue-notice" role="status">
-          <Pause aria-hidden="true" />
-          <span>
-            <strong>The queue is paused.</strong> Active downloads continue, but
-            new ones won’t start.
-          </span>
+      <div className="job-table">
+        <div className="job-table__head" aria-hidden="true">
+          <span className="job-cell--name">Name</span>
+          <span className="job-cell--size">Size</span>
+          <span className="job-cell--progress">Progress</span>
+          <span className="job-cell--status">Status</span>
+          <span className="job-cell--speed">Speed</span>
+          <span className="job-cell--eta">ETA</span>
         </div>
-      )}
-
-      {queue.length === 0 ? (
-        <EmptyState
-          icon={ListVideo}
-          title="Your queue is clear"
-          action={
-            <button
-              className="button button--primary"
-              onClick={() => setView("download")}
-            >
-              <Download aria-hidden="true" /> New download
-            </button>
-          }
-        >
-          Add a link to begin. Active and waiting downloads will appear here
-          with progress, speed, and time remaining.
-        </EmptyState>
-      ) : (
-        <section className="job-list" aria-label="Download queue">
-          {queue.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              onCancel={() => void cancel(job.id)}
-              onRetry={() => void retry(job.id)}
-              onRemove={() => void removeQueueJob(job.id)}
-              onMove={(direction) => void reorder(job.id, direction)}
-            />
-          ))}
-        </section>
-      )}
+        {jobs.length === 0 ? (
+          <EmptyDownloads filter={filter} />
+        ) : (
+          <ul className="job-list" aria-label={filterLabels[filter]}>
+            {jobs.map((job) => (
+              <JobRow
+                key={job.id}
+                job={job}
+                selected={job.id === selectedId}
+                onSelect={selectJob}
+                onCancel={cancel}
+                onRetry={retry}
+                onRemove={removeJob}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

@@ -23,8 +23,9 @@ pub async fn initialize_app(service: State<'_, Arc<AppService>>) -> AppResult<Ap
 pub async fn probe_media(
     service: State<'_, Arc<AppService>>,
     url: String,
+    no_playlist: Option<bool>,
 ) -> AppResult<MediaProbe> {
-    service.probe_media(url).await
+    service.probe_media(url, no_playlist.unwrap_or(false)).await
 }
 #[tauri::command]
 pub async fn cancel_probe(service: State<'_, Arc<AppService>>) -> AppResult<()> {
@@ -70,11 +71,12 @@ pub async fn reorder_job(
     service: State<'_, Arc<AppService>>,
     job_id: String,
     direction: String,
-) -> AppResult<()> {
+) -> AppResult<Vec<DownloadJob>> {
     if !matches!(direction.as_str(), "up" | "down") {
         return Err(AppError::Validation("Invalid queue direction".into()));
     }
-    service.db.reorder(&job_id, &direction).await
+    service.db.reorder(&job_id, &direction).await?;
+    service.db.queue().await
 }
 #[tauri::command]
 pub async fn set_queue_paused(service: State<'_, Arc<AppService>>, paused: bool) -> AppResult<()> {
@@ -107,8 +109,9 @@ pub async fn refresh_dependencies(
 #[tauri::command]
 pub async fn refresh_hardware_acceleration(
     service: State<'_, Arc<AppService>>,
+    force: Option<bool>,
 ) -> AppResult<HardwareAccelerationInfo> {
-    Ok(service.hardware_acceleration().await)
+    Ok(service.hardware_acceleration(force.unwrap_or(true)).await)
 }
 #[tauri::command]
 pub async fn remove_history_entry(

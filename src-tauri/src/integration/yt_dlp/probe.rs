@@ -1,4 +1,4 @@
-use std::{path::Path, process::Stdio, sync::LazyLock};
+use std::{ffi::OsString, path::Path, process::Stdio, sync::LazyLock};
 
 use serde_json::Value;
 use tokio::{
@@ -14,10 +14,15 @@ use crate::{
     integration::process::{configure_grouped_background_process, terminate_process_tree},
 };
 
+/// Reads a link's metadata. `no_playlist` analyzes only the video when the
+/// link also names a playlist; `network` carries proxy, cookie, and other
+/// access settings so analysis sees what the download will see.
 pub async fn probe(
     executable: &Path,
     deno: Option<&Path>,
     url: &str,
+    no_playlist: bool,
+    network: Vec<OsString>,
     cancel: CancellationToken,
 ) -> AppResult<MediaProbe> {
     let parsed = url::Url::parse(url)
@@ -35,10 +40,15 @@ pub async fn probe(
             .arg(format!("deno:{}", deno.to_string_lossy()));
     }
     command
+        .args(network)
         .args([
             "--dump-single-json",
             "--flat-playlist",
-            "--yes-playlist",
+            if no_playlist {
+                "--no-playlist"
+            } else {
+                "--yes-playlist"
+            },
             "--playlist-items",
             ":200",
             "--color",
@@ -133,6 +143,7 @@ fn from_json(value: Value, input_url: &str, stderr: &str) -> MediaProbe {
                 .and_then(Value::as_u64),
             note: text(format, "format_note"),
             hdr: text(format, "dynamic_range").is_some_and(|v| !matches!(v.as_str(), "SDR" | "")),
+            language: text(format, "language"),
         })
         .collect();
     let mut subtitles = Vec::new();

@@ -1,30 +1,26 @@
 import { FolderOpen } from "lucide-react";
 
-interface DestinationPickerProps {
-  destination: string;
-  filenameTemplate: string;
-  compact?: boolean;
-  onBrowse: () => void;
-}
-
+/** The folder a download is saved to; clicking opens the system folder picker. */
 export function DestinationPicker({
   destination,
-  filenameTemplate,
-  compact = false,
   onBrowse,
-}: DestinationPickerProps) {
+}: {
+  destination: string;
+  onBrowse: () => void;
+}) {
   return (
     <button
       type="button"
-      className={`path-picker${compact ? " path-picker--compact" : ""}`}
+      className="path-picker"
       onClick={onBrowse}
       aria-label="Browse for a download folder"
+      title={destination || undefined}
     >
-      <FolderOpen aria-hidden="true" />
-      <span>
-        <strong>{destination || "Select a folder"}</strong>
-        <small>{filenameTemplate}</small>
+      <span className="path-picker__label">Save to</span>
+      <span className="path-picker__path mono">
+        {destination || "Choose a folder"}
       </span>
+      <FolderOpen aria-hidden="true" />
     </button>
   );
 }

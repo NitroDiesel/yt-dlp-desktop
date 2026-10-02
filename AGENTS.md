@@ -5,6 +5,7 @@ Use this file as the entrypoint for coding-agent work in this repository.
 ## Load the authoritative context
 
 - Read `README.md` for current user-facing capabilities, supported platforms, bundled dependencies, and local verification commands.
+- Read `PRODUCT.md` and `DESIGN.md` before changing UI. Do not reintroduce colored edge rails, decorative card borders, or redundant heading labels.
 - Read `docs/ARCHITECTURE.md` before changing commands, persistence, process execution, dependency discovery, GPU conversion, or filesystem actions.
 - Read `docs/CAPABILITY_AUDIT.md` before changing yt-dlp option coverage.
 - Read `docs/RELEASING.md` before changing versions, packaging, tags, signing, checksums, attestations, or GitHub Releases.
