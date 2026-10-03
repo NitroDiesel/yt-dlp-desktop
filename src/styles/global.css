@@ -1,7 +1,7 @@
 /*
- * yt-dlp Desktop. Skin follows T3 Code's tokens (apps/web/src/index.css):
- * neutral-950 canvas, 3%-lifted surfaces, 6% white hairlines, system type,
- * oklch(0.571 0.21 264) primary. Layout is a desktop download manager.
+ * yt-dlp Desktop. Neutral-950 canvas, 3%-lifted surfaces, 6% white
+ * hairlines, system type, oklch(0.571 0.21 264) primary. Layout is a desktop
+ * download manager.
  *
  * Performance rules: no backdrop-filter, no continuously running animation,
  * progress moves with transform only, long lists skip off-screen rows.
@@ -1472,7 +1472,7 @@ input[type="range"] {
   margin-top: 8px;
 }
 
-/* T3's stepped breath: a handful of frames per cycle instead of one per vsync. */
+/* Stepped breath: a handful of frames per cycle instead of one per vsync. */
 @keyframes skeleton {
   0%,
   42% {

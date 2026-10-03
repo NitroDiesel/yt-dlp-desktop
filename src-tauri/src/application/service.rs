@@ -137,10 +137,8 @@ impl AppService {
     /// a client asks for it, so launching the app never waits on test encodes.
     pub async fn snapshot(&self) -> AppResult<AppSnapshot> {
         let settings = self.settings.read().await.clone();
-        let dependencies = match self.dependency_cache.read().await.clone() {
-            Some(cached) => cached,
-            None => self.dependencies().await,
-        };
+        let dependencies =
+            cached_or_load(&self.dependency_cache, self.inspect_dependencies()).await;
         let ffmpeg = self.dependencies.resolve_ffmpeg(&settings);
         let hardware_acceleration = self
             .cached_hardware(&ffmpeg)
@@ -613,10 +611,14 @@ impl AppService {
     }
     /// Re-checks every tool and refreshes the cached result.
     pub async fn dependencies(&self) -> Vec<DependencyInfo> {
-        let settings = self.settings.read().await.clone();
-        let dependencies = self.dependencies.inspect_all(&settings).await;
+        let dependencies = self.inspect_dependencies().await;
         *self.dependency_cache.write().await = Some(dependencies.clone());
         dependencies
+    }
+
+    async fn inspect_dependencies(&self) -> Vec<DependencyInfo> {
+        let settings = self.settings.read().await.clone();
+        self.dependencies.inspect_all(&settings).await
     }
 
     /// GPU capability; cached unless `force` asks for a fresh probe.
@@ -661,6 +663,22 @@ impl AppService {
             let _ = self.app.emit("download-job-changed", job);
         }
     }
+}
+
+/// Returns the cached value, or runs `load` and caches its result. The read
+/// guard is released before the write lock is taken; holding it across the
+/// load (as a `match` scrutinee would) deadlocks the first launch.
+async fn cached_or_load<T: Clone>(
+    cache: &RwLock<Option<T>>,
+    load: impl std::future::Future<Output = T>,
+) -> T {
+    let cached = cache.read().await.clone();
+    if let Some(value) = cached {
+        return value;
+    }
+    let value = load.await;
+    *cache.write().await = Some(value.clone());
+    value
 }
 
 fn push_diagnostic(job: &mut DownloadJob, line: String) {
@@ -871,12 +889,26 @@ async fn restore_last_download_directory(settings: &mut AppSettings) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        EMIT_INTERVAL, JobPublisher, PERSIST_INTERVAL, restore_last_download_directory,
-        validate_downloaded_file,
+        EMIT_INTERVAL, JobPublisher, PERSIST_INTERVAL, cached_or_load,
+        restore_last_download_directory, validate_downloaded_file,
     };
     use crate::domain::{AppSettings, JobStatus};
     use std::{fs, time::Duration};
-    use tokio::time::Instant;
+    use tokio::{sync::RwLock, time::Instant};
+
+    #[tokio::test]
+    async fn an_empty_cache_is_filled_without_deadlocking() {
+        let cache = RwLock::new(None);
+        let first =
+            tokio::time::timeout(Duration::from_secs(5), cached_or_load(&cache, async { 7 }))
+                .await
+                .expect("filling an empty cache must not wait on its own read lock");
+        assert_eq!(first, 7);
+        assert_eq!(*cache.read().await, Some(7));
+
+        let second = cached_or_load(&cache, async { unreachable!("cached value is reused") }).await;
+        assert_eq!(second, 7);
+    }
 
     #[test]
     fn progress_bursts_are_coalesced_but_state_changes_are_immediate() {
