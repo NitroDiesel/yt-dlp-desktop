@@ -26,7 +26,7 @@ The downloads page follows Motrix: a framed table with column headers, a large v
 - App-wide network behavior (impersonation, region, IP version, timeout, request pauses, chunking, retries) lives in Settings. `docs/CAPABILITY_AUDIT.md` maps every yt-dlp option to its control.
 - It is an in-app native `<dialog>`, not a second OS window, so no second webview is started.
 - Pasting a link anywhere outside a text field, or into the link box, reads it immediately. Ctrl/⌘+N opens the dialog empty; Ctrl/⌘+comma opens Settings; Ctrl/⌘+B hides or shows the sidebar.
-- The sidebar can be hidden, as in Motrix: the button at the right of its brand row, or Ctrl/⌘+B. While it is hidden, each page header starts with Show sidebar and New download. The choice is remembered on the device. It switches instantly; a width animation would re-lay out the table every frame.
+- The sidebar can be hidden, as in Motrix: the button at the right of its brand row, or Ctrl/⌘+B. While it is hidden, each page header starts with Show sidebar and New download. The choice is remembered on the device. It slides out in 200ms while its column closes; the page header buttons fade in.
 - Dropdowns are a field with a chevron that opens a floating list on the popover surface, with a check beside the current choice. They never use the native popup, which ignores the theme. The list stays fixed in the window so scrolling panels and the dialog cannot clip it, and it flips above the field near the bottom edge.
 - Settings uses grouped rows: section title, a card of rows, title and description left, control right. Changes save from a strip that appears only when something changed, with Discard beside Save.
 
@@ -55,4 +55,4 @@ Dark is the default; light uses a matching zinc palette. Source: `src/styles/glo
 - Copy: no em or en dashes, at most one `·` per line, plain verbs, no marketing claims. Numbers shown are real values from yt-dlp, never decorative.
 - The sidebar shows the real app icon (`src/assets/app-icon.svg`, copied from `src-tauri/icons`), not a stand-in mark.
 - Desktop conventions: arrow cursor, no selection of interface text, and no browser context menu, reload, print, or find in release builds.
-- Motion is limited to short hover/press transitions, the switch knob, progress `transform`, and a stepped skeleton pulse while analyzing. Reduce motion turns all of it off.
+- Motion is limited to one-off transitions under 200ms: hover/press, the switch knob, progress `transform`, the dialog opening, dropdown lists fading in with their chevron turning, the sidebar sliding, and a stepped skeleton pulse while analyzing. Nothing animates continuously. Reduce motion, in Settings or in the OS, turns all of it off.

@@ -79,7 +79,8 @@ function useGlobalShortcuts() {
   }, []);
 }
 
-function Sidebar() {
+/** Stays mounted while hidden so it can slide; inert keeps it out of focus and assistive tech. */
+function Sidebar({ hidden }: { hidden: boolean }) {
   const {
     page,
     filter,
@@ -103,69 +104,71 @@ function Sidebar() {
     useShallow((state) => countDownloads(state.queue, state.history)),
   );
   return (
-    <aside className="sidebar">
-      <div className="sidebar__brand">
-        <img className="brand-mark" src={appIcon} alt="" width={22} height={22} />
-        <span className="sidebar__label">
-          yt-dlp <span>Desktop</span>
-        </span>
+    <div className="sidebar-slot">
+      <aside className="sidebar" inert={hidden} aria-hidden={hidden || undefined}>
+        <div className="sidebar__brand">
+          <img className="brand-mark" src={appIcon} alt="" width={22} height={22} />
+          <span className="sidebar__label">
+            yt-dlp <span>Desktop</span>
+          </span>
+          <button
+            type="button"
+            className="icon-button sidebar__toggle"
+            aria-label="Hide sidebar"
+            title={`Hide sidebar (${modifierKey} B)`}
+            onClick={toggleSidebar}
+          >
+            <PanelLeftClose aria-hidden="true" />
+          </button>
+        </div>
+  
         <button
           type="button"
-          className="icon-button sidebar__toggle"
-          aria-label="Hide sidebar"
-          title={`Hide sidebar (${modifierKey} B)`}
-          onClick={toggleSidebar}
+          className={`sidebar-row sidebar-row--new ${newDownloadOpen ? "sidebar-row--active" : ""}`}
+          onClick={() => openNewDownload()}
+          title={`New download (${modifierKey}+N)`}
         >
-          <PanelLeftClose aria-hidden="true" />
+          <Plus aria-hidden="true" />
+          <span className="sidebar__label">New download</span>
+          <kbd className="sidebar__label">{modifierKey} N</kbd>
         </button>
-      </div>
-
-      <button
-        type="button"
-        className={`sidebar-row sidebar-row--new ${newDownloadOpen ? "sidebar-row--active" : ""}`}
-        onClick={() => openNewDownload()}
-        title={`New download (${modifierKey}+N)`}
-      >
-        <Plus aria-hidden="true" />
-        <span className="sidebar__label">New download</span>
-        <kbd className="sidebar__label">{modifierKey} N</kbd>
-      </button>
-
-      <nav className="sidebar__nav" aria-label="Downloads">
-        {filters.map(({ filter: value, icon: Icon }) => {
-          const active = page === "downloads" && filter === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              className={`sidebar-row ${active ? "sidebar-row--active" : ""}`}
-              aria-current={active ? "page" : undefined}
-              title={filterLabels[value]}
-              onClick={() => showDownloads(value)}
-            >
-              <Icon aria-hidden="true" />
-              <span className="sidebar__label">{filterLabels[value]}</span>
-              {counts[value] > 0 && (
-                <span className="sidebar-row__count">{counts[value]}</span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="sidebar__footer">
-        <button
-          type="button"
-          className={`sidebar-row ${page === "settings" ? "sidebar-row--active" : ""}`}
-          aria-current={page === "settings" ? "page" : undefined}
-          title={`Settings (${modifierKey}+,)`}
-          onClick={showSettings}
-        >
-          <Settings aria-hidden="true" />
-          <span className="sidebar__label">Settings</span>
-        </button>
-      </div>
-    </aside>
+  
+        <nav className="sidebar__nav" aria-label="Downloads">
+          {filters.map(({ filter: value, icon: Icon }) => {
+            const active = page === "downloads" && filter === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`sidebar-row ${active ? "sidebar-row--active" : ""}`}
+                aria-current={active ? "page" : undefined}
+                title={filterLabels[value]}
+                onClick={() => showDownloads(value)}
+              >
+                <Icon aria-hidden="true" />
+                <span className="sidebar__label">{filterLabels[value]}</span>
+                {counts[value] > 0 && (
+                  <span className="sidebar-row__count">{counts[value]}</span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+  
+        <div className="sidebar__footer">
+          <button
+            type="button"
+            className={`sidebar-row ${page === "settings" ? "sidebar-row--active" : ""}`}
+            aria-current={page === "settings" ? "page" : undefined}
+            title={`Settings (${modifierKey}+,)`}
+            onClick={showSettings}
+          >
+            <Settings aria-hidden="true" />
+            <span className="sidebar__label">Settings</span>
+          </button>
+        </div>
+      </aside>
+    </div>
   );
 }
 
@@ -275,7 +278,7 @@ export function AppShell({
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      {!collapsed && <Sidebar />}
+      <Sidebar hidden={collapsed} />
       <div className={`stage ${inspector ? "stage--inspecting" : ""}`}>
         <main className="workspace" id="main-content" tabIndex={-1}>
           {children}
