@@ -15,7 +15,7 @@ The files above are the source of truth. Update the relevant document when a cha
 
 ## Product direction
 
-yt-dlp Desktop is a focused desktop download manager, not a browser and not a chat or prompt interface. Its information architecture should feel familiar to users of conventional download managers. Its visual skin may borrow the restrained density, typography, surfaces, and dark theme of T3 Code without copying T3 Code's chat layout.
+yt-dlp Desktop is a focused desktop download manager, not a browser and not a chat or prompt interface. Its information architecture should feel familiar to users of conventional download managers. Its visual skin is restrained and dense: system typography, quiet near-black surfaces, and a dark theme first.
 
 Keep the primary flow lightweight and obvious: analyze a link, choose video/audio/exact format, choose a destination, then download or queue. Put expert controls behind progressive disclosure. Remove decorative status chrome when it does not communicate state or provide an action.
 

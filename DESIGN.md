@@ -1,6 +1,6 @@
 # Design
 
-yt-dlp Desktop looks and behaves like desktop download-manager software, not a web downloader site and not a chat app. The skin follows T3 Code; the layout follows conventional download managers.
+yt-dlp Desktop looks and behaves like desktop download-manager software, not a web downloader site and not a chat app. The skin is a restrained, dense dark theme; the layout follows conventional download managers.
 
 ## Layout
 
@@ -26,15 +26,15 @@ The downloads page follows Motrix: a framed table with column headers, a large v
 - App-wide network behavior (impersonation, region, IP version, timeout, request pauses, chunking, retries) lives in Settings. `docs/CAPABILITY_AUDIT.md` maps every yt-dlp option to its control.
 - It is an in-app native `<dialog>`, not a second OS window, so no second webview is started.
 - Pasting a link anywhere outside a text field, or into the link box, reads it immediately. Ctrl/⌘+N opens the dialog empty; Ctrl/⌘+comma opens Settings.
-- Settings uses T3 Code's grouped rows: section title, a card of rows, title and description left, control right. Changes save from a strip that appears only when something changed, with Discard beside Save.
+- Settings uses grouped rows: section title, a card of rows, title and description left, control right. Changes save from a strip that appears only when something changed, with Discard beside Save.
 
 ## Skin tokens
 
-Dark is the default; light mirrors T3 Code's zinc light theme. Source: `src/styles/global.css`.
+Dark is the default; light uses a matching zinc palette. Source: `src/styles/global.css`.
 
 | Token | Dark | Light |
 |---|---|---|
-| Canvas | `#0a0a0a` + T3 grain | `#fcfcfc` + T3 grain |
+| Canvas | `#0a0a0a` + fine grain | `#fcfcfc` + fine grain |
 | Surface (sidebar, inspector) | `#111111` | `#fafafa` |
 | Text / muted | `#f5f5f5` / `#8a8a8a` | `#27272a` / `#71717a` |
 | Primary | `#346bf1` (oklch 0.571 0.21 264) | `#1b4ed8` (oklch 0.488 0.217 264) |
@@ -51,4 +51,4 @@ Dark is the default; light mirrors T3 Code's zinc light theme. Source: `src/styl
 - Copy: no em or en dashes, at most one `·` per line, plain verbs, no marketing claims. Numbers shown are real values from yt-dlp, never decorative.
 - The sidebar shows the real app icon (`src/assets/app-icon.svg`, copied from `src-tauri/icons`), not a stand-in mark.
 - Desktop conventions: arrow cursor, no selection of interface text, and no browser context menu, reload, print, or find in release builds.
-- Motion is limited to short hover/press transitions, the switch knob, progress `transform`, and T3's stepped skeleton pulse while analyzing. Reduce motion turns all of it off.
+- Motion is limited to short hover/press transitions, the switch knob, progress `transform`, and a stepped skeleton pulse while analyzing. Reduce motion turns all of it off.
