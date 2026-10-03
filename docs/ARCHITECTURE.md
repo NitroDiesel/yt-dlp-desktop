@@ -33,18 +33,25 @@ Application service ───── Queue scheduler
 
 ## Process lifecycle
 
-1. The UI asks Rust to probe a URL. Rust validates the input and invokes the selected yt-dlp executable directly—never through a shell.
+1. The UI asks Rust to probe a URL. Rust validates the input and invokes the selected yt-dlp executable directly, never through a shell.
 2. The probe response is normalized into a small media contract. Stale or cancelled responses are ignored in the UI.
 3. Enqueue validates the destination and options, stores the job, and notifies the scheduler.
-4. The scheduler claims jobs up to the configured concurrency (1–4). Arguments are assembled as an array; conflicting expert flags are rejected.
-5. yt-dlp emits a machine-readable sentinel protocol. stdout/stderr are consumed concurrently to prevent pipe deadlocks. Structured progress is persisted and emitted to the UI.
+4. The scheduler claims jobs up to the configured concurrency (1-4). Arguments are assembled as an array; conflicting expert flags are rejected.
+5. yt-dlp emits a machine-readable sentinel protocol. stdout/stderr are consumed concurrently to prevent pipe deadlocks. Structured progress is emitted to the UI at most four times a second and persisted at most every two seconds; status changes and reported output files are written and emitted immediately.
 6. Cancellation first targets the whole process group/tree gracefully, then force-terminates it after a bounded wait.
 7. Optional GPU conversion re-checks the driver, automatically selects a working NVENC or AMF encoder for the requested codec, and writes a unique temporary MKV beside the source. The source is removed only after the GPU output is finalized; failures and cancellation preserve it.
 8. Output paths are accepted only from successful child-process output, persisted, and used for open/reveal actions.
 
 ## Persistence and recovery
 
-The database lives in the per-user Tauri application-data directory. Jobs, settings, dependency metadata, and the bounded diagnostic tail are transactional. At startup, work left in an active state is marked `interrupted`; queued work is scheduled again. Completed and failed records remain in history until the user clears them.
+The database lives in the per-user Tauri application-data directory. Jobs, settings, dependency metadata, and the bounded diagnostic tail are transactional. At startup, work left in an active state is marked `interrupted`; queued work is scheduled again. Completed and failed records remain in history until the user removes them. The UI shows the queue and history as one downloads list; "Clear list" in the Completed view removes completed records from both, never the files.
+
+## Resource use
+
+- Tool version checks run concurrently once per launch and again only on "Check again" or when a custom tool path changes.
+- GPU detection runs real test encodes, so it is deferred until something needs it (opening New download or Settings, or a GPU conversion job) and cached per FFmpeg binary for the session.
+- The UI subscribes to narrow store slices and memoizes download rows, so a progress event re-renders only the affected row, the status bar, and an open details panel.
+- No continuously running CSS animation: status icons are static, progress moves with `transform`, and the analysis skeleton uses a stepped pulse only while a link is being read.
 
 Schema changes must be additive migrations. Released migrations are immutable. A future change that cannot be rolled back must include a backup/export path before the migration ships.
 

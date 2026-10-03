@@ -1,6 +1,6 @@
 [package]
 name = "yt-dlp-desktop"
-version = "0.1.1"
+version = "0.1.8"
 description = "A task-focused desktop interface for yt-dlp"
 authors = ["yt-dlp Desktop contributors"]
 license = "GPL-3.0-or-later"
@@ -40,3 +40,8 @@ windows-sys = { version = "0.61.0", features = ["Win32_System_Threading"] }
 
 [dev-dependencies]
 tempfile = "3.22.0"
+
+# Dependencies build without debug info, so debug builds and the target
+# folder stay much smaller. The app's own crate keeps full debug info.
+[profile.dev.package."*"]
+debug = false

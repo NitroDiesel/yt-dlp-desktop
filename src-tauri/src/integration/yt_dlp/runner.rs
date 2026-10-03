@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     domain::DownloadProgress,
     error::{AppError, AppResult},
+    integration::process::{configure_grouped_background_process, terminate_process_tree},
 };
 
 use super::parser::{ProtocolEvent, parse_protocol_line};
@@ -46,7 +47,7 @@ pub async fn run_download(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    configure_process_group(&mut command);
+    configure_grouped_background_process(&mut command);
     let mut child = command
         .spawn()
         .map_err(|e| AppError::Process(e.to_string()))?;
@@ -103,7 +104,7 @@ pub async fn run_download(
             push_diagnostic(&stderr_state, &stderr_events, redact(&line)).await;
         }
     });
-    let status = tokio::select! {status=child.wait()=>status?,_=cancel.cancelled()=>{terminate_tree(pid,true).await;sleep(Duration::from_secs(2)).await;if child.try_wait()?.is_none(){terminate_tree(pid,false).await;}let _=child.wait().await;let _=stdout_task.await;let _=stderr_task.await;let guard=state.lock().await;return Ok(RunnerOutcome{cancelled:true,output_path:guard.output_path.clone(),title:guard.title.clone(),diagnostics:guard.diagnostics.clone(),error:None});}};
+    let status = tokio::select! {status=child.wait()=>status?,_=cancel.cancelled()=>{terminate_process_tree(pid,true).await;sleep(Duration::from_secs(2)).await;if child.try_wait()?.is_none(){terminate_process_tree(pid,false).await;}let _=child.wait().await;let _=stdout_task.await;let _=stderr_task.await;let guard=state.lock().await;return Ok(RunnerOutcome{cancelled:true,output_path:guard.output_path.clone(),title:guard.title.clone(),diagnostics:guard.diagnostics.clone(),error:None});}};
     let _ = stdout_task.await;
     let _ = stderr_task.await;
     let guard = state.lock().await;
@@ -165,46 +166,4 @@ fn classify_error(lines: &[String]) -> String {
         "download_failed"
     }
     .into()
-}
-
-#[cfg(windows)]
-fn configure_process_group(command: &mut Command) {
-    command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP);
-}
-#[cfg(unix)]
-fn configure_process_group(command: &mut Command) {
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setpgid(0, 0) == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-}
-#[cfg(windows)]
-async fn terminate_tree(pid: u32, graceful: bool) {
-    let mut args = vec!["/PID".to_string(), pid.to_string(), "/T".into()];
-    if !graceful {
-        args.push("/F".into())
-    }
-    let _ = Command::new("taskkill.exe")
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await;
-}
-#[cfg(unix)]
-async fn terminate_tree(pid: u32, graceful: bool) {
-    unsafe {
-        libc::kill(
-            -(pid as i32),
-            if graceful {
-                libc::SIGINT
-            } else {
-                libc::SIGKILL
-            },
-        );
-    }
 }

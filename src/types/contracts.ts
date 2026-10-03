@@ -1,6 +1,8 @@
 export type MediaMode = "video" | "audio" | "custom";
 export type HardwareCodec = "h264" | "hevc" | "av1";
 export type HardwareEncoderProvider = "nvenc" | "amf";
+export type AudioFormat = "best" | "mp3" | "m4a" | "opus" | "flac" | "wav";
+export type AudioQuality = "best" | "320K" | "256K" | "192K" | "128K";
 export type JobStatus =
   | "queued"
   | "analyzing"
@@ -23,6 +25,7 @@ export interface MediaFormat {
   fileSize?: number;
   note?: string;
   hdr: boolean;
+  language?: string;
 }
 
 export interface SubtitleTrack {
@@ -49,7 +52,8 @@ export interface MediaProbe {
 export interface DownloadOptions {
   mode: MediaMode;
   quality: string;
-  audioFormat: "best" | "mp3" | "m4a" | "opus" | "flac" | "wav";
+  audioFormat: AudioFormat;
+  audioQuality: AudioQuality;
   subtitleLanguages: string[];
   writeSubtitles: boolean;
   writeAutomaticSubtitles: boolean;
@@ -59,12 +63,70 @@ export interface DownloadOptions {
   playlistItems?: string;
   customFormat?: string;
   customArguments: string[];
+  clip?: {
+    startSeconds: number;
+    durationSeconds: number;
+    precise: boolean;
+  };
   videoConversion?: {
     codec: HardwareCodec;
     quality: number;
     useHardwareDecode: boolean;
   };
+  container?: VideoContainer;
+  codecPreference?: CodecPreference;
+  subtitleFormat?: SubtitleFormat;
+  embedChapters?: boolean;
+  splitChapters?: boolean;
+  sponsorblock?: {
+    mode: "mark" | "remove";
+    categories: SponsorCategory[];
+  };
+  writeThumbnail?: boolean;
+  writeDescription?: boolean;
+  writeInfoJson?: boolean;
+  restrictFilenames?: boolean;
+  concurrentFragments?: number;
+  /** Upload-date window for playlists and channels, as YYYYMMDD. */
+  dateAfter?: string;
+  dateBefore?: string;
+  maxDownloads?: number;
+  sleepInterval?: number;
+  /** Preferred audio track language, for videos with several dubs. */
+  audioLanguage?: string;
+  /** For a video link that also names a playlist: download only the video. */
+  noPlaylist?: boolean;
+  liveFromStart?: boolean;
+  minFilesizeMb?: number;
+  maxFilesizeMb?: number;
+  skipLive?: boolean;
+  minDurationSeconds?: number;
+  playlistOrder?: "reverse" | "random";
+  referer?: string;
+  userAgent?: string;
+  windowsFilenames?: boolean;
+  trimFilenames?: number;
+  forceOverwrites?: boolean;
+  writeComments?: boolean;
+  writeLink?: boolean;
+  thumbnailFormat?: "jpg" | "png" | "webp";
+  keepVideo?: boolean;
+  /** Plain text; chapters whose title contains it are cut out. */
+  removeChapters?: string;
 }
+
+export type VideoContainer = "mp4" | "mkv" | "webm";
+export type CodecPreference = "h264" | "vp9" | "av1";
+export type SubtitleFormat = "srt" | "vtt" | "ass";
+export type SponsorCategory =
+  | "sponsor"
+  | "selfpromo"
+  | "interaction"
+  | "intro"
+  | "outro"
+  | "preview"
+  | "filler"
+  | "music_offtopic";
 
 export interface DownloadRequest {
   url: string;
@@ -103,6 +165,7 @@ export interface DownloadJob {
 
 export interface AppSettings {
   downloadDirectory: string;
+  lastDownloadDirectory?: string;
   filenameTemplate: string;
   defaultMode: MediaMode;
   defaultQuality: string;
@@ -118,6 +181,17 @@ export interface AppSettings {
   rateLimit?: string;
   retries: number;
   fragmentRetries: number;
+  ipVersion?: "ipv4" | "ipv6";
+  socketTimeout?: number;
+  /** yt-dlp --xff: "default", "never", or a two-letter country code. */
+  geoBypass?: string;
+  impersonate?: "chrome" | "edge" | "safari" | "firefox";
+  sleepRequests?: number;
+  httpChunkSizeMb?: number;
+  extractorRetries?: number;
+  legacyServerConnect?: boolean;
+  /** Stamp files with the download time instead of the upload date. */
+  useDownloadTime?: boolean;
 }
 
 export interface DependencyInfo {
@@ -142,6 +216,7 @@ export interface HardwareEncoderInfo {
 
 export interface HardwareAccelerationInfo {
   status:
+    | "checking"
     | "available"
     | "unsupported_platform"
     | "build_missing"

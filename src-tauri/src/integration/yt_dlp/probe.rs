@@ -1,4 +1,4 @@
-use std::{path::Path, process::Stdio, sync::LazyLock};
+use std::{ffi::OsString, path::Path, process::Stdio, sync::LazyLock};
 
 use serde_json::Value;
 use tokio::{
@@ -11,12 +11,18 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     domain::{MediaFormat, MediaProbe, SubtitleTrack},
     error::{AppError, AppResult},
+    integration::process::{configure_grouped_background_process, terminate_process_tree},
 };
 
+/// Reads a link's metadata. `no_playlist` analyzes only the video when the
+/// link also names a playlist; `network` carries proxy, cookie, and other
+/// access settings so analysis sees what the download will see.
 pub async fn probe(
     executable: &Path,
     deno: Option<&Path>,
     url: &str,
+    no_playlist: bool,
+    network: Vec<OsString>,
     cancel: CancellationToken,
 ) -> AppResult<MediaProbe> {
     let parsed = url::Url::parse(url)
@@ -34,10 +40,15 @@ pub async fn probe(
             .arg(format!("deno:{}", deno.to_string_lossy()));
     }
     command
+        .args(network)
         .args([
             "--dump-single-json",
             "--flat-playlist",
-            "--yes-playlist",
+            if no_playlist {
+                "--no-playlist"
+            } else {
+                "--yes-playlist"
+            },
             "--playlist-items",
             ":200",
             "--color",
@@ -48,7 +59,7 @@ pub async fn probe(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    configure_process_group(&mut command);
+    configure_grouped_background_process(&mut command);
     let mut child = command
         .spawn()
         .map_err(|error| AppError::Process(error.to_string()))?;
@@ -60,12 +71,12 @@ pub async fn probe(
     let status = tokio::select! {
         status = child.wait() => Ok(status?),
         _ = cancel.cancelled() => {
-            if let Some(pid)=pid { terminate_tree(pid, false).await; }
+            if let Some(pid)=pid { terminate_process_tree(pid, false).await; }
             let _ = child.wait().await;
             Err("Analysis cancelled")
         },
         _ = sleep(Duration::from_secs(90)) => {
-            if let Some(pid)=pid { terminate_tree(pid, false).await; }
+            if let Some(pid)=pid { terminate_process_tree(pid, false).await; }
             let _ = child.wait().await;
             Err("Analysis timed out")
         }
@@ -132,6 +143,7 @@ fn from_json(value: Value, input_url: &str, stderr: &str) -> MediaProbe {
                 .and_then(Value::as_u64),
             note: text(format, "format_note"),
             hdr: text(format, "dynamic_range").is_some_and(|v| !matches!(v.as_str(), "SDR" | "")),
+            language: text(format, "language"),
         })
         .collect();
     let mut subtitles = Vec::new();
@@ -241,42 +253,6 @@ pub fn redact(value: &str) -> String {
     match HOME_PATH.as_ref() {
         Some(pattern) => pattern.replace_all(&value, "[home]").into_owned(),
         None => value,
-    }
-}
-
-#[cfg(windows)]
-fn configure_process_group(command: &mut Command) {
-    command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP);
-}
-#[cfg(unix)]
-fn configure_process_group(command: &mut Command) {
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setpgid(0, 0) == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-}
-#[cfg(windows)]
-async fn terminate_tree(pid: u32, _graceful: bool) {
-    let _ = Command::new("taskkill.exe")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .output()
-        .await;
-}
-#[cfg(unix)]
-async fn terminate_tree(pid: u32, graceful: bool) {
-    unsafe {
-        libc::kill(
-            -(pid as i32),
-            if graceful {
-                libc::SIGINT
-            } else {
-                libc::SIGKILL
-            },
-        );
     }
 }
 

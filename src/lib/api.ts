@@ -10,7 +10,8 @@ import type {
 
 export const appApi = {
   initialize: () => invoke<AppSnapshot>("initialize_app"),
-  analyze: (url: string) => invoke<MediaProbe>("probe_media", { url }),
+  analyze: (url: string, noPlaylist = false) =>
+    invoke<MediaProbe>("probe_media", { url, noPlaylist }),
   cancelProbe: () => invoke<void>("cancel_probe"),
   enqueue: (request: DownloadRequest, startImmediately: boolean) =>
     invoke<DownloadJob>("enqueue_download", { request, startImmediately }),
@@ -19,17 +20,22 @@ export const appApi = {
   removeQueueJob: (jobId: string) =>
     invoke<void>("remove_queue_job", { jobId }),
   clearCompleted: () => invoke<void>("clear_completed_jobs"),
+  /** Moves a waiting job and returns the reordered queue. */
   reorderJob: (jobId: string, direction: "up" | "down") =>
-    invoke<void>("reorder_job", { jobId, direction }),
+    invoke<DownloadJob[]>("reorder_job", { jobId, direction }),
   setQueuePaused: (paused: boolean) =>
     invoke<void>("set_queue_paused", { paused }),
   saveSettings: (settings: AppSettings) =>
     invoke<AppSettings>("save_settings", { settings }),
+  rememberDownloadDirectory: (directory: string) =>
+    invoke<AppSettings>("remember_download_directory", { directory }),
   refreshDependencies: () =>
     invoke<AppSnapshot["dependencies"]>("refresh_dependencies"),
-  refreshHardwareAcceleration: () =>
+  /** Cached GPU capability; `force` re-runs the test encodes. */
+  refreshHardwareAcceleration: (force: boolean) =>
     invoke<AppSnapshot["hardwareAcceleration"]>(
       "refresh_hardware_acceleration",
+      { force },
     ),
   removeHistory: (jobId: string) =>
     invoke<void>("remove_history_entry", { jobId }),

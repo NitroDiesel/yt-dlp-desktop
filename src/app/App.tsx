@@ -1,15 +1,27 @@
 import { useEffect } from "react";
-import { AlertTriangle, LoaderCircle } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
+import { AlertTriangle } from "lucide-react";
 import { AppShell } from "../components/AppShell";
-import { DownloadView } from "../features/download/DownloadView";
-import { HistoryView } from "../features/history/HistoryView";
+import { NewDownloadDialog } from "../features/download/NewDownloadDialog";
+import { JobDetails } from "../features/queue/JobDetails";
 import { QueueView } from "../features/queue/QueueView";
 import { SettingsView } from "../features/settings/SettingsView";
 import { useAppStore } from "./store";
 
 export default function App() {
-  const { activeView, initialize, initialized, fatalError, settings } =
-    useAppStore();
+  const { page, inspector, newDownloadOpen, initialized, fatalError, theme, reducedMotion } =
+    useAppStore(
+      useShallow((state) => ({
+        page: state.page,
+        inspector: state.inspector,
+        newDownloadOpen: state.newDownloadOpen,
+        initialized: state.initialized,
+        fatalError: state.fatalError,
+        theme: state.settings?.theme,
+        reducedMotion: state.settings?.reducedMotion,
+      })),
+    );
+  const initialize = useAppStore((state) => state.initialize);
 
   useEffect(() => {
     void initialize();
@@ -17,26 +29,26 @@ export default function App() {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme = settings?.theme ?? "system";
-    root.classList.toggle("reduce-motion", Boolean(settings?.reducedMotion));
-  }, [settings?.reducedMotion, settings?.theme]);
+    root.dataset.theme = theme ?? "system";
+    root.classList.toggle("reduce-motion", Boolean(reducedMotion));
+  }, [reducedMotion, theme]);
 
   if (!initialized) {
     return (
       <main className="center-state" aria-live="polite">
-        <LoaderCircle className="spin" aria-hidden="true" />
-        <p>Preparing your download workspace…</p>
+        <p>Starting yt-dlp Desktop…</p>
       </main>
     );
   }
 
   if (fatalError) {
     return (
-      <main className="center-state center-state--error">
+      <main className="center-state">
         <AlertTriangle aria-hidden="true" />
-        <h1>Couldn’t open the workspace</h1>
+        <h1>yt-dlp Desktop couldn't load its data</h1>
         <p>{fatalError}</p>
         <button
+          type="button"
           className="button button--primary"
           onClick={() => void initialize()}
         >
@@ -46,12 +58,15 @@ export default function App() {
     );
   }
 
+  const panel =
+    page === "downloads" && inspector ? (
+      <JobDetails key={inspector.id} jobId={inspector.id} />
+    ) : undefined;
+
   return (
-    <AppShell>
-      {activeView === "download" && <DownloadView />}
-      {activeView === "queue" && <QueueView />}
-      {activeView === "history" && <HistoryView />}
-      {activeView === "settings" && <SettingsView />}
+    <AppShell inspector={panel}>
+      {page === "settings" ? <SettingsView /> : <QueueView />}
+      {newDownloadOpen && <NewDownloadDialog />}
     </AppShell>
   );
 }

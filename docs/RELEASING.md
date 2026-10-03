@@ -31,7 +31,7 @@ Use `./scripts/prepare-sidecars.sh <rust-target>` on macOS/Linux and replace the
 | macOS 12+ Apple silicon | `aarch64-apple-darwin` | `.dmg` |
 | Linux x64, glibc 2.28+ | `x86_64-unknown-linux-gnu` | `.deb`, AppImage |
 
-The `Package smoke` workflow creates unsigned internal artifacts on demand and on `main`. The `Release` workflow is tag-only and protected by the `release` GitHub environment. After every platform package and the FFmpeg source-materials archive succeed, it publishes a prerelease with generated notes, checksums, build-provenance attestations, and installers. Promote releases to stable only after signed-tag, Windows Authenticode, and Apple signing/notarization credentials are configured and verified.
+The `Package smoke` workflow creates unsigned internal artifacts on demand and on `main`. The `Release` workflow is tag-only and protected by the `release` GitHub environment. After every platform package and the FFmpeg source-materials archive succeed, it publishes a stable release with generated notes, checksums, build-provenance attestations, and installers. Until Windows Authenticode and Apple signing/notarization credentials are configured, release notes must clearly warn that operating systems may show an unknown-publisher prompt.
 
 ## Signing credentials
 
