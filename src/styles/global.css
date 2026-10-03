@@ -17,6 +17,7 @@
   --inspector-width: 400px;
   --topbar-height: 52px;
   --statusbar-height: 28px;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
 
   --background: #0a0a0a;
   --card: #111111;
@@ -303,6 +304,7 @@ kbd {
     "sidebar status";
   height: 100%;
   background: var(--background) var(--grain);
+  transition: grid-template-columns 200ms var(--ease-out);
 }
 
 .stage {
@@ -366,12 +368,22 @@ kbd {
 
 /* ---------- Sidebar ---------- */
 
-.sidebar {
+.sidebar-slot {
   grid-area: sidebar;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Fixed width inside a slot that shrinks, so hiding slides it out instead of squeezing it. */
+.sidebar {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  width: var(--sidebar-width);
+  height: 100%;
   min-height: 0;
+  transition: transform 200ms var(--ease-out);
   padding: 0 8px 8px;
   border-right: 1px solid var(--border);
   background: var(--card);
@@ -740,6 +752,11 @@ input[aria-invalid="true"] {
 .select__chevron {
   flex: none;
   color: var(--muted-foreground);
+  transition: transform 150ms var(--ease-out);
+}
+
+.select[aria-expanded="true"] .select__chevron {
+  transform: rotate(180deg);
 }
 
 /* Fixed so scrolling panels and the dialog body never clip it. */
@@ -754,6 +771,14 @@ input[aria-invalid="true"] {
   border-radius: var(--radius);
   background: var(--popover);
   box-shadow: var(--popover-shadow);
+  animation: popover-in 120ms var(--ease-out);
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .select__option {
@@ -2219,12 +2244,13 @@ input[type="range"] {
 
 /* ---------- Sidebar toggle ---------- */
 
-/* Hidden sidebar: the stage and status bar take the full width. */
+/* Hidden sidebar: its column closes while it slides out, then the stage has the full width. */
 .app--sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas:
-    "stage"
-    "status";
+  grid-template-columns: 0px minmax(0, 1fr);
+}
+
+.app--sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
 }
 
 .sidebar__toggle {
@@ -2243,6 +2269,13 @@ input[type="range"] {
   display: flex;
   gap: 2px;
   margin-left: -10px;
+  animation: fade-in 200ms var(--ease-out);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* Small windows: the sidebar becomes an icon rail. */

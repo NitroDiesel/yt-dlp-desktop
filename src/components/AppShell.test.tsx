@@ -69,6 +69,8 @@ describe("AppShell", () => {
     await user.click(screen.getByRole("button", { name: "Hide sidebar" }));
     expect(screen.queryByRole("navigation", { name: "Downloads" })).not.toBeInTheDocument();
     expect(localStorage.getItem("sidebar-collapsed")).toBe("true");
+    // Kept mounted so it can slide out, but out of reach while hidden.
+    expect(document.querySelector(".sidebar")).toHaveAttribute("inert");
 
     await user.click(screen.getByRole("button", { name: "New download" }));
     expect(useAppStore.getState().newDownloadOpen).toBe(true);
