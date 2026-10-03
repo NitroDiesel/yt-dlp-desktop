@@ -23,23 +23,8 @@ impl DependencyManager {
         Self { bundled_dir }
     }
 
+    /// Version-checks every tool concurrently; yt-dlp's cold start dominates the wall time.
     pub async fn inspect_all(&self, settings: &AppSettings) -> Vec<DependencyInfo> {
-        let yt = self
-            .inspect(
-                DependencyKind::YtDlp,
-                settings.yt_dlp_path.as_deref(),
-                executable_name("yt-dlp"),
-                &["--version"],
-            )
-            .await;
-        let ffmpeg = self
-            .inspect(
-                DependencyKind::Ffmpeg,
-                settings.ffmpeg_path.as_deref(),
-                executable_name("ffmpeg"),
-                &["-version"],
-            )
-            .await;
         let ffprobe_custom = settings
             .ffmpeg_path
             .as_deref()
@@ -47,22 +32,32 @@ impl DependencyManager {
             .map(|p| p.join(executable_name("ffprobe")))
             .filter(|p| p.is_file())
             .map(|p| p.to_string_lossy().to_string());
-        let ffprobe = self
-            .inspect(
+        let (yt, ffmpeg, ffprobe, deno) = tokio::join!(
+            self.inspect(
+                DependencyKind::YtDlp,
+                settings.yt_dlp_path.as_deref(),
+                executable_name("yt-dlp"),
+                &["--version"],
+            ),
+            self.inspect(
+                DependencyKind::Ffmpeg,
+                settings.ffmpeg_path.as_deref(),
+                executable_name("ffmpeg"),
+                &["-version"],
+            ),
+            self.inspect(
                 DependencyKind::Ffprobe,
                 ffprobe_custom.as_deref(),
                 executable_name("ffprobe"),
                 &["-version"],
-            )
-            .await;
-        let deno = self
-            .inspect(
+            ),
+            self.inspect(
                 DependencyKind::JavascriptRuntime,
                 settings.deno_path.as_deref(),
                 executable_name("deno"),
                 &["--version"],
-            )
-            .await;
+            ),
+        );
         vec![yt, ffmpeg, ffprobe, deno]
     }
 

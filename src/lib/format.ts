@@ -9,7 +9,7 @@ export function formatDuration(totalSeconds?: number): string {
 }
 
 export function formatBytes(bytes?: number): string {
-  if (bytes == null || !Number.isFinite(bytes)) return "—";
+  if (bytes == null || !Number.isFinite(bytes)) return "unknown";
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = bytes;
   let unit = 0;

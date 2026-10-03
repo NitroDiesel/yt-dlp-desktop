@@ -14,6 +14,8 @@ pub struct MediaFormat {
     pub file_size: Option<u64>,
     pub note: Option<String>,
     pub hdr: bool,
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -193,6 +195,265 @@ pub struct DownloadOptions {
     pub clip: Option<ClipOptions>,
     #[serde(default)]
     pub video_conversion: Option<VideoConversionOptions>,
+    /// Typed yt-dlp features exposed as UI controls. All default to off so
+    /// jobs persisted by earlier releases deserialize unchanged.
+    #[serde(default)]
+    pub container: Option<VideoContainer>,
+    #[serde(default)]
+    pub codec_preference: Option<CodecPreference>,
+    #[serde(default)]
+    pub subtitle_format: Option<SubtitleFormat>,
+    #[serde(default)]
+    pub embed_chapters: bool,
+    #[serde(default)]
+    pub split_chapters: bool,
+    #[serde(default)]
+    pub sponsorblock: Option<SponsorBlockOptions>,
+    #[serde(default)]
+    pub write_thumbnail: bool,
+    #[serde(default)]
+    pub write_description: bool,
+    #[serde(default)]
+    pub write_info_json: bool,
+    #[serde(default)]
+    pub restrict_filenames: bool,
+    #[serde(default)]
+    pub concurrent_fragments: Option<u8>,
+    /// Upload-date window for playlists and channels, as `YYYYMMDD`.
+    #[serde(default)]
+    pub date_after: Option<String>,
+    #[serde(default)]
+    pub date_before: Option<String>,
+    #[serde(default)]
+    pub max_downloads: Option<u32>,
+    #[serde(default)]
+    pub sleep_interval: Option<u32>,
+    /// Preferred audio track language code, for videos with several dubs.
+    #[serde(default)]
+    pub audio_language: Option<String>,
+    /// For a video link that also names a playlist: download only the video.
+    #[serde(default)]
+    pub no_playlist: bool,
+    #[serde(default)]
+    pub live_from_start: bool,
+    #[serde(default)]
+    pub min_filesize_mb: Option<u32>,
+    #[serde(default)]
+    pub max_filesize_mb: Option<u32>,
+    #[serde(default)]
+    pub skip_live: bool,
+    #[serde(default)]
+    pub min_duration_seconds: Option<u32>,
+    #[serde(default)]
+    pub playlist_order: Option<PlaylistOrder>,
+    #[serde(default)]
+    pub referer: Option<String>,
+    #[serde(default)]
+    pub user_agent: Option<String>,
+    #[serde(default)]
+    pub windows_filenames: bool,
+    #[serde(default)]
+    pub trim_filenames: Option<u32>,
+    #[serde(default)]
+    pub force_overwrites: bool,
+    #[serde(default)]
+    pub write_comments: bool,
+    #[serde(default)]
+    pub write_link: bool,
+    #[serde(default)]
+    pub thumbnail_format: Option<ThumbnailFormat>,
+    #[serde(default)]
+    pub keep_video: bool,
+    /// Plain text; chapters whose title contains it are cut out.
+    #[serde(default)]
+    pub remove_chapters: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PlaylistOrder {
+    Reverse,
+    Random,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ThumbnailFormat {
+    Jpg,
+    Png,
+    Webp,
+}
+
+impl ThumbnailFormat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Jpg => "jpg",
+            Self::Png => "png",
+            Self::Webp => "webp",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum IpVersion {
+    Ipv4,
+    Ipv6,
+}
+
+impl Default for DownloadOptions {
+    /// Best-quality video with metadata embedded and every optional feature off.
+    fn default() -> Self {
+        Self {
+            mode: MediaMode::Video,
+            quality: "best".into(),
+            audio_format: AudioFormat::Best,
+            audio_quality: AudioQuality::Best,
+            subtitle_languages: vec![],
+            write_subtitles: false,
+            write_automatic_subtitles: false,
+            embed_subtitles: false,
+            embed_metadata: true,
+            embed_thumbnail: false,
+            playlist_items: None,
+            custom_format: None,
+            custom_arguments: vec![],
+            clip: None,
+            video_conversion: None,
+            container: None,
+            codec_preference: None,
+            subtitle_format: None,
+            embed_chapters: false,
+            split_chapters: false,
+            sponsorblock: None,
+            write_thumbnail: false,
+            write_description: false,
+            write_info_json: false,
+            restrict_filenames: false,
+            concurrent_fragments: None,
+            date_after: None,
+            date_before: None,
+            max_downloads: None,
+            sleep_interval: None,
+            audio_language: None,
+            no_playlist: false,
+            live_from_start: false,
+            min_filesize_mb: None,
+            max_filesize_mb: None,
+            skip_live: false,
+            min_duration_seconds: None,
+            playlist_order: None,
+            referer: None,
+            user_agent: None,
+            windows_filenames: false,
+            trim_filenames: None,
+            force_overwrites: false,
+            write_comments: false,
+            write_link: false,
+            thumbnail_format: None,
+            keep_video: false,
+            remove_chapters: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum VideoContainer {
+    Mp4,
+    Mkv,
+    Webm,
+}
+
+impl VideoContainer {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Mp4 => "mp4",
+            Self::Mkv => "mkv",
+            Self::Webm => "webm",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CodecPreference {
+    H264,
+    Vp9,
+    Av1,
+}
+
+impl CodecPreference {
+    /// yt-dlp `--format-sort` key; `avc` is yt-dlp's name for H.264.
+    pub fn sort_key(self) -> &'static str {
+        match self {
+            Self::H264 => "vcodec:avc",
+            Self::Vp9 => "vcodec:vp9",
+            Self::Av1 => "vcodec:av01",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SubtitleFormat {
+    Srt,
+    Vtt,
+    Ass,
+}
+
+impl SubtitleFormat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Srt => "srt",
+            Self::Vtt => "vtt",
+            Self::Ass => "ass",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SponsorBlockMode {
+    /// Adds the segments as chapters; the media is untouched.
+    Mark,
+    /// Cuts the segments out of the file with FFmpeg.
+    Remove,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SponsorCategory {
+    Sponsor,
+    Selfpromo,
+    Interaction,
+    Intro,
+    Outro,
+    Preview,
+    Filler,
+    MusicOfftopic,
+}
+
+impl SponsorCategory {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Sponsor => "sponsor",
+            Self::Selfpromo => "selfpromo",
+            Self::Interaction => "interaction",
+            Self::Intro => "intro",
+            Self::Outro => "outro",
+            Self::Preview => "preview",
+            Self::Filler => "filler",
+            Self::MusicOfftopic => "music_offtopic",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SponsorBlockOptions {
+    pub mode: SponsorBlockMode,
+    pub categories: Vec<SponsorCategory>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -288,6 +549,26 @@ pub struct AppSettings {
     pub rate_limit: Option<String>,
     pub retries: u8,
     pub fragment_retries: u8,
+    #[serde(default)]
+    pub ip_version: Option<IpVersion>,
+    #[serde(default)]
+    pub socket_timeout: Option<u32>,
+    /// yt-dlp `--xff`: "default", "never", or a two-letter country code.
+    #[serde(default)]
+    pub geo_bypass: Option<String>,
+    #[serde(default)]
+    pub impersonate: Option<String>,
+    #[serde(default)]
+    pub sleep_requests: Option<u32>,
+    #[serde(default)]
+    pub http_chunk_size_mb: Option<u32>,
+    #[serde(default)]
+    pub extractor_retries: Option<u32>,
+    #[serde(default)]
+    pub legacy_server_connect: bool,
+    /// Stamp files with the download time instead of the upload date.
+    #[serde(default)]
+    pub use_download_time: bool,
 }
 
 impl Default for AppSettings {
@@ -316,6 +597,15 @@ impl Default for AppSettings {
             rate_limit: None,
             retries: 10,
             fragment_retries: 10,
+            ip_version: None,
+            socket_timeout: None,
+            geo_bypass: None,
+            impersonate: None,
+            sleep_requests: None,
+            http_chunk_size_mb: None,
+            extractor_retries: None,
+            legacy_server_connect: false,
+            use_download_time: false,
         }
     }
 }
@@ -384,6 +674,14 @@ impl HardwareAccelerationInfo {
                 .collect(),
             message: message.into(),
         }
+    }
+
+    /// Placeholder returned while the runtime GPU probe runs in the background.
+    pub fn checking() -> Self {
+        Self::unavailable(
+            "checking",
+            "Checking the installed GPU and driver for NVENC or AMF…",
+        )
     }
 
     pub fn encoder_for(&self, codec: &HardwareCodec) -> Option<&HardwareEncoderInfo> {

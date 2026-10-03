@@ -11,7 +11,10 @@ use std::{
 
 use chrono::Utc;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{Mutex, RwLock};
+use tokio::{
+    sync::{Mutex, RwLock, mpsc::UnboundedReceiver},
+    time::{Duration, Instant},
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -24,7 +27,9 @@ use crate::{
     integration::{
         dependencies::DependencyManager,
         ffmpeg::run_hardware_conversion,
-        yt_dlp::{RunnerEvent, build_download_args, probe, run_download},
+        yt_dlp::{
+            RunnerEvent, build_download_args, needs_ffmpeg, network_args, probe, run_download,
+        },
     },
     persistence::Database,
 };
@@ -38,6 +43,64 @@ pub struct AppService {
     running: Mutex<HashMap<String, CancellationToken>>,
     scheduler: Mutex<()>,
     probe_cancel: Mutex<Option<CancellationToken>>,
+    /// Tool version checks spawn processes; they run once and on explicit refresh.
+    dependency_cache: RwLock<Option<Vec<DependencyInfo>>>,
+    /// GPU detection runs several test encodes, so it is cached per FFmpeg binary
+    /// and started only when something needs the answer.
+    hardware_cache: RwLock<Option<HardwareCache>>,
+    hardware_probe: Mutex<()>,
+}
+
+struct HardwareCache {
+    ffmpeg: Option<PathBuf>,
+    info: HardwareAccelerationInfo,
+}
+
+/// Live progress reaches the UI at most four times a second and SQLite every
+/// two seconds; status changes and finished files are written immediately.
+const EMIT_INTERVAL: Duration = Duration::from_millis(250);
+const PERSIST_INTERVAL: Duration = Duration::from_secs(2);
+
+struct JobPublisher {
+    persisted_status: JobStatus,
+    last_emit: Option<Instant>,
+    last_persist: Instant,
+    dirty: bool,
+}
+
+impl JobPublisher {
+    fn new(status: JobStatus, now: Instant) -> Self {
+        Self {
+            persisted_status: status,
+            last_emit: None,
+            last_persist: now,
+            dirty: false,
+        }
+    }
+
+    /// Returns `(persist, emit)` for an update observed at `now`.
+    fn decide(&mut self, status: &JobStatus, now: Instant, urgent: bool) -> (bool, bool) {
+        let urgent = urgent || *status != self.persisted_status;
+        let persist = urgent || now.duration_since(self.last_persist) >= PERSIST_INTERVAL;
+        let emit = urgent
+            || self
+                .last_emit
+                .is_none_or(|last| now.duration_since(last) >= EMIT_INTERVAL);
+        if persist {
+            self.persisted_status = status.clone();
+            self.last_persist = now;
+        }
+        if emit {
+            self.last_emit = Some(now);
+        }
+        self.dirty = !emit;
+        (persist, emit)
+    }
+
+    fn next_emit(&self) -> Instant {
+        self.last_emit
+            .map_or_else(Instant::now, |last| last + EMIT_INTERVAL)
+    }
 }
 
 impl AppService {
@@ -64,15 +127,25 @@ impl AppService {
             running: Mutex::new(HashMap::new()),
             scheduler: Mutex::new(()),
             probe_cancel: Mutex::new(None),
+            dependency_cache: RwLock::new(None),
+            hardware_cache: RwLock::new(None),
+            hardware_probe: Mutex::new(()),
         }))
     }
 
+    /// Initial state for the UI. GPU detection is reported as `checking` until
+    /// a client asks for it, so launching the app never waits on test encodes.
     pub async fn snapshot(&self) -> AppResult<AppSnapshot> {
         let settings = self.settings.read().await.clone();
-        let (dependencies, hardware_acceleration) = tokio::join!(
-            self.dependencies.inspect_all(&settings),
-            self.dependencies.inspect_hardware_acceleration(&settings)
-        );
+        let dependencies = match self.dependency_cache.read().await.clone() {
+            Some(cached) => cached,
+            None => self.dependencies().await,
+        };
+        let ffmpeg = self.dependencies.resolve_ffmpeg(&settings);
+        let hardware_acceleration = self
+            .cached_hardware(&ffmpeg)
+            .await
+            .unwrap_or_else(HardwareAccelerationInfo::checking);
         Ok(AppSnapshot {
             settings,
             queue: self.db.queue().await?,
@@ -83,11 +156,41 @@ impl AppService {
         })
     }
 
+    async fn cached_hardware(&self, ffmpeg: &Option<PathBuf>) -> Option<HardwareAccelerationInfo> {
+        self.hardware_cache
+            .read()
+            .await
+            .as_ref()
+            .filter(|cache| &cache.ffmpeg == ffmpeg)
+            .map(|cache| cache.info.clone())
+    }
+
+    /// Cached GPU capability for the current FFmpeg; `force` re-runs the probe.
+    async fn hardware_for(&self, settings: &AppSettings, force: bool) -> HardwareAccelerationInfo {
+        let ffmpeg = self.dependencies.resolve_ffmpeg(settings);
+        if !force && let Some(info) = self.cached_hardware(&ffmpeg).await {
+            return info;
+        }
+        let _probe = self.hardware_probe.lock().await;
+        if !force && let Some(info) = self.cached_hardware(&ffmpeg).await {
+            return info;
+        }
+        let info = self
+            .dependencies
+            .inspect_hardware_acceleration(settings)
+            .await;
+        *self.hardware_cache.write().await = Some(HardwareCache {
+            ffmpeg,
+            info: info.clone(),
+        });
+        info
+    }
+
     pub async fn start(self: &Arc<Self>) -> AppResult<()> {
         self.clone().schedule().await
     }
 
-    pub async fn probe_media(&self, url: String) -> AppResult<MediaProbe> {
+    pub async fn probe_media(&self, url: String, no_playlist: bool) -> AppResult<MediaProbe> {
         let settings = self.settings.read().await.clone();
         let executable = self.dependencies.resolve_yt_dlp(&settings).ok_or_else(|| {
             AppError::DependencyMissing(
@@ -102,7 +205,15 @@ impl AppService {
             }
         }
         let deno = self.dependencies.resolve_deno(&settings);
-        let result = probe(&executable, deno.as_deref(), &url, token).await;
+        let result = probe(
+            &executable,
+            deno.as_deref(),
+            &url,
+            no_playlist,
+            network_args(&settings),
+            token,
+        )
+        .await;
         self.probe_cancel.lock().await.take();
         result
     }
@@ -130,13 +241,10 @@ impl AppService {
                 .resolve_ffmpeg(&settings)
                 .map(|path| path.to_string_lossy().into_owned());
         }
-        let needs_ffmpeg = (request.options.mode == crate::domain::MediaMode::Audio
-            && request.options.audio_format != crate::domain::AudioFormat::Best)
-            || request.options.embed_subtitles
-            || request.options.video_conversion.is_some();
+        let needs_ffmpeg = needs_ffmpeg(&request.options);
         if needs_ffmpeg && settings.ffmpeg_path.is_none() {
             return Err(AppError::DependencyMissing(
-                "FFmpeg is required for conversion or embedded subtitles. Choose source audio or configure FFmpeg in Settings.".into(),
+                "FFmpeg is required for the selected conversion, chapters, SponsorBlock, or subtitle options. Turn them off or restore FFmpeg in Settings.".into(),
             ));
         }
         if let Some(conversion) = request.options.video_conversion.as_ref() {
@@ -151,10 +259,7 @@ impl AppService {
                 ));
             }
             validate_video_conversion(conversion)?;
-            let capability = self
-                .dependencies
-                .inspect_hardware_acceleration(&settings)
-                .await;
+            let capability = self.hardware_for(&settings, false).await;
             let encoder = capability.encoder_for(&conversion.codec);
             if encoder.is_none() {
                 return Err(AppError::DependencyMissing(format!(
@@ -256,32 +361,30 @@ impl AppService {
                     let runner = tokio::spawn(async move {
                         run_download(&executable, args, runner_cancel, tx).await
                     });
-                    while let Some(event) = rx.recv().await {
-                        match event {
-                            RunnerEvent::Progress(progress) => {
-                                job.progress = progress;
-                                job.status = JobStatus::Downloading;
-                            }
-                            RunnerEvent::PostProcess(stage) => {
-                                job.status = JobStatus::PostProcessing;
-                                job.progress.stage = Some(stage);
-                            }
-                            RunnerEvent::Output { path, title } => {
-                                job.output_path = Some(path);
-                                if title.is_some() {
-                                    job.title = title;
-                                }
-                            }
-                            RunnerEvent::Diagnostic(line) => {
-                                if job.diagnostics.len() >= 100 {
-                                    job.diagnostics.remove(0);
-                                }
-                                job.diagnostics.push(line);
-                            }
+                    self.relay_events(&mut job, &mut rx, |job, event| match event {
+                        RunnerEvent::Progress(progress) => {
+                            job.progress = progress;
+                            job.status = JobStatus::Downloading;
+                            false
                         }
-                        let _ = self.db.update_job(&job).await;
-                        let _ = self.app.emit("download-job-changed", &job);
-                    }
+                        RunnerEvent::PostProcess(stage) => {
+                            job.status = JobStatus::PostProcessing;
+                            job.progress.stage = Some(stage);
+                            true
+                        }
+                        RunnerEvent::Output { path, title } => {
+                            job.output_path = Some(path);
+                            if title.is_some() {
+                                job.title = title;
+                            }
+                            true
+                        }
+                        RunnerEvent::Diagnostic(line) => {
+                            push_diagnostic(job, line);
+                            false
+                        }
+                    })
+                    .await;
                     match runner.await {
                         Ok(value) => value,
                         Err(error) => Err(AppError::Process(error.to_string())),
@@ -333,10 +436,7 @@ impl AppService {
                     let _ = self.app.emit("download-job-changed", &job);
                     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                     let conversion_cancel = cancel.clone();
-                    let capability = self
-                        .dependencies
-                        .inspect_hardware_acceleration(&settings)
-                        .await;
+                    let capability = self.hardware_for(&settings, false).await;
                     if let Some(encoder) = capability.encoder_for(&conversion.codec).cloned() {
                         let conversion_options = conversion.clone();
                         let converter = tokio::spawn(async move {
@@ -350,23 +450,18 @@ impl AppService {
                             )
                             .await
                         });
-                        while let Some(event) = rx.recv().await {
+                        self.relay_events(&mut job, &mut rx, |job, event| {
                             match event {
                                 RunnerEvent::Progress(progress) => {
                                     job.progress.stage = progress.stage;
                                     job.status = JobStatus::PostProcessing;
                                 }
-                                RunnerEvent::Diagnostic(line) => {
-                                    if job.diagnostics.len() >= 100 {
-                                        job.diagnostics.remove(0);
-                                    }
-                                    job.diagnostics.push(line);
-                                }
+                                RunnerEvent::Diagnostic(line) => push_diagnostic(job, line),
                                 RunnerEvent::Output { .. } | RunnerEvent::PostProcess(_) => {}
                             }
-                            let _ = self.db.update_job(&job).await;
-                            let _ = self.app.emit("download-job-changed", &job);
-                        }
+                            false
+                        })
+                        .await;
                         match converter.await {
                             Ok(Ok(converted)) if converted.cancelled => {
                                 outcome.cancelled = true;
@@ -476,8 +571,14 @@ impl AppService {
         validate_settings(&settings)?;
         let mut current = self.settings.write().await;
         self.db.save_settings(&settings).await?;
+        let tools_changed = current.yt_dlp_path != settings.yt_dlp_path
+            || current.ffmpeg_path != settings.ffmpeg_path
+            || current.deno_path != settings.deno_path;
         *current = settings.clone();
         drop(current);
+        if tools_changed {
+            self.dependency_cache.write().await.take();
+        }
         self.clone().schedule().await?;
         Ok(settings)
     }
@@ -510,17 +611,63 @@ impl AppService {
         *current = settings.clone();
         Ok(settings)
     }
+    /// Re-checks every tool and refreshes the cached result.
     pub async fn dependencies(&self) -> Vec<DependencyInfo> {
         let settings = self.settings.read().await.clone();
-        self.dependencies.inspect_all(&settings).await
+        let dependencies = self.dependencies.inspect_all(&settings).await;
+        *self.dependency_cache.write().await = Some(dependencies.clone());
+        dependencies
     }
 
-    pub async fn hardware_acceleration(&self) -> HardwareAccelerationInfo {
+    /// GPU capability; cached unless `force` asks for a fresh probe.
+    pub async fn hardware_acceleration(&self, force: bool) -> HardwareAccelerationInfo {
         let settings = self.settings.read().await.clone();
-        self.dependencies
-            .inspect_hardware_acceleration(&settings)
-            .await
+        self.hardware_for(&settings, force).await
     }
+
+    /// Feeds runner events into `job`, persisting and emitting at a bounded rate.
+    /// `apply` returns true for events that must reach the UI immediately.
+    async fn relay_events(
+        &self,
+        job: &mut DownloadJob,
+        events: &mut UnboundedReceiver<RunnerEvent>,
+        mut apply: impl FnMut(&mut DownloadJob, RunnerEvent) -> bool,
+    ) {
+        let mut publisher = JobPublisher::new(job.status.clone(), Instant::now());
+        loop {
+            let event = if publisher.dirty {
+                tokio::select! {
+                    event = events.recv() => event,
+                    _ = tokio::time::sleep_until(publisher.next_emit()) => {
+                        self.publish(job, &mut publisher, false).await;
+                        continue;
+                    }
+                }
+            } else {
+                events.recv().await
+            };
+            let Some(event) = event else { break };
+            let urgent = apply(job, event);
+            self.publish(job, &mut publisher, urgent).await;
+        }
+    }
+
+    async fn publish(&self, job: &DownloadJob, publisher: &mut JobPublisher, urgent: bool) {
+        let (persist, emit) = publisher.decide(&job.status, Instant::now(), urgent);
+        if persist {
+            let _ = self.db.update_job(job).await;
+        }
+        if emit {
+            let _ = self.app.emit("download-job-changed", job);
+        }
+    }
+}
+
+fn push_diagnostic(job: &mut DownloadJob, line: String) {
+    if job.diagnostics.len() >= 100 {
+        job.diagnostics.remove(0);
+    }
+    job.diagnostics.push(line);
 }
 
 pub(crate) async fn validate_downloaded_file(
@@ -621,6 +768,46 @@ fn validate_settings(settings: &AppSettings) -> AppResult<()> {
             "Enter a valid browser cookie source".into(),
         ));
     }
+    if settings
+        .socket_timeout
+        .is_some_and(|seconds| !(1..=600).contains(&seconds))
+    {
+        return Err(AppError::Validation(
+            "The network timeout must be between 1 and 600 seconds".into(),
+        ));
+    }
+    if let Some(region) = settings.geo_bypass.as_deref()
+        && !(matches!(region, "default" | "never")
+            || (region.len() == 2
+                && region
+                    .chars()
+                    .all(|character| character.is_ascii_uppercase())))
+    {
+        return Err(AppError::Validation(
+            "Choose a region bypass of Automatic, Off, or a two-letter country code".into(),
+        ));
+    }
+    if settings
+        .impersonate
+        .as_deref()
+        .is_some_and(|target| !matches!(target, "chrome" | "edge" | "safari" | "firefox"))
+    {
+        return Err(AppError::Validation(
+            "Choose Chrome, Edge, Safari, or Firefox to impersonate".into(),
+        ));
+    }
+    if settings.sleep_requests.is_some_and(|seconds| seconds > 60)
+        || settings
+            .extractor_retries
+            .is_some_and(|retries| retries > 100)
+        || settings
+            .http_chunk_size_mb
+            .is_some_and(|megabytes| !(1..=1024).contains(&megabytes))
+    {
+        return Err(AppError::Validation(
+            "A network setting is outside its allowed range".into(),
+        ));
+    }
     if settings.retries > 100 || settings.fragment_retries > 100 {
         return Err(AppError::Validation(
             "Retry counts must be between 0 and 100".into(),
@@ -683,9 +870,39 @@ async fn restore_last_download_directory(settings: &mut AppSettings) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{restore_last_download_directory, validate_downloaded_file};
-    use crate::domain::AppSettings;
-    use std::fs;
+    use super::{
+        EMIT_INTERVAL, JobPublisher, PERSIST_INTERVAL, restore_last_download_directory,
+        validate_downloaded_file,
+    };
+    use crate::domain::{AppSettings, JobStatus};
+    use std::{fs, time::Duration};
+    use tokio::time::Instant;
+
+    #[test]
+    fn progress_bursts_are_coalesced_but_state_changes_are_immediate() {
+        let start = Instant::now();
+        let mut publisher = JobPublisher::new(JobStatus::Downloading, start);
+        let downloading = JobStatus::Downloading;
+
+        assert_eq!(publisher.decide(&downloading, start, false), (false, true));
+        let soon = start + Duration::from_millis(40);
+        assert_eq!(publisher.decide(&downloading, soon, false), (false, false));
+        assert!(publisher.dirty, "a skipped update is flushed later");
+        assert_eq!(publisher.next_emit(), start + EMIT_INTERVAL);
+
+        let later = start + EMIT_INTERVAL;
+        assert_eq!(publisher.decide(&downloading, later, false), (false, true));
+        assert!(!publisher.dirty);
+
+        let finishing = JobStatus::PostProcessing;
+        let stage = later + Duration::from_millis(10);
+        assert_eq!(publisher.decide(&finishing, stage, false), (true, true));
+        let output = stage + Duration::from_millis(10);
+        assert_eq!(publisher.decide(&finishing, output, true), (true, true));
+
+        let persisted = output + PERSIST_INTERVAL;
+        assert_eq!(publisher.decide(&finishing, persisted, false), (true, true));
+    }
 
     #[tokio::test]
     async fn accepts_regular_files_inside_the_destination() {

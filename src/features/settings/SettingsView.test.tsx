@@ -89,4 +89,53 @@ describe("SettingsView", () => {
     await user.click(screen.getByText("Custom tool overrides"));
     replacementButtons.forEach((button) => expect(button).toBeVisible());
   });
+
+  it("saves edits only when asked and can discard them", async () => {
+    const user = userEvent.setup();
+    const saveSettings = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({ saveSettings });
+    render(<SettingsView />);
+
+    expect(
+      screen.queryByRole("region", { name: "Unsaved changes" }),
+    ).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Downloads at once"), "3");
+    expect(screen.getByRole("region", { name: "Unsaved changes" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+    expect(screen.getByLabelText("Downloads at once")).toHaveValue("1");
+    expect(
+      screen.queryByRole("region", { name: "Unsaved changes" }),
+    ).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Theme"), "dark");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: "dark" }),
+    );
+  });
+
+  it("saves network options chosen from controls", async () => {
+    const user = userEvent.setup();
+    const saveSettings = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({ saveSettings });
+    render(<SettingsView />);
+
+    await user.selectOptions(screen.getByLabelText("Browser impersonation"), "chrome");
+    await user.selectOptions(screen.getByLabelText("Region bypass"), "country");
+    await user.clear(screen.getByLabelText("Country code"));
+    await user.type(screen.getByLabelText("Country code"), "jp");
+    await user.selectOptions(screen.getByLabelText("IP version"), "ipv4");
+    await user.click(screen.getByRole("switch", { name: "Date files by download time" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        impersonate: "chrome",
+        geoBypass: "JP",
+        ipVersion: "ipv4",
+        useDownloadTime: true,
+      }),
+    );
+  });
 });

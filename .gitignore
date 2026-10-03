@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.impeccable/review/
 src-tauri/target/
 src-tauri/gen/
 src-tauri/binaries/*

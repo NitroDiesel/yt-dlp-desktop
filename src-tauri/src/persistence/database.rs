@@ -124,10 +124,19 @@ impl Database {
         Ok(())
     }
 
+    /// Removes completed records from the downloads list. Media files are untouched;
+    /// failed, cancelled, and interrupted records stay so they can be retried.
     pub async fn clear_completed(&self) -> AppResult<()> {
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query(
+            "DELETE FROM history WHERE job_id IN (SELECT id FROM jobs WHERE status='completed')",
+        )
+        .execute(&mut *transaction)
+        .await?;
         sqlx::query("UPDATE jobs SET in_queue=0 WHERE status='completed'")
-            .execute(&self.pool)
+            .execute(&mut *transaction)
             .await?;
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -242,6 +251,7 @@ mod tests {
                     custom_arguments: vec![],
                     clip: None,
                     video_conversion: None,
+                    ..crate::domain::DownloadOptions::default()
                 },
             },
             title: Some("Test".into()),
@@ -272,7 +282,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn clearing_queue_does_not_delete_history() {
+    async fn clearing_completed_keeps_records_that_can_be_retried() {
         let directory = tempfile::tempdir().unwrap();
         let db = Database::connect(&directory.path().join("test.sqlite3"))
             .await
@@ -281,9 +291,20 @@ mod tests {
         completed.finished_at = Some(Utc::now().to_rfc3339());
         db.insert_job(&completed, 0).await.unwrap();
         db.update_job(&completed).await.unwrap();
+        let mut failed = job(JobStatus::Failed);
+        failed.id = "job-2".into();
+        failed.finished_at = Some(Utc::now().to_rfc3339());
+        db.insert_job(&failed, 1).await.unwrap();
+        db.update_job(&failed).await.unwrap();
+
         db.clear_completed().await.unwrap();
-        assert!(db.queue().await.unwrap().is_empty());
-        assert_eq!(db.history().await.unwrap().len(), 1);
+
+        let queue = db.queue().await.unwrap();
+        let history = db.history().await.unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].id, "job-2");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].id, "job-2");
     }
 
     #[tokio::test]

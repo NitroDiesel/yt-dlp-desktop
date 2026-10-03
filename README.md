@@ -9,8 +9,11 @@ The installer includes pinned, checksum-verified builds of **yt-dlp, FFmpeg, FFp
 ## What it does
 
 - Analyzes a video, playlist, or channel URL before downloading.
-- Offers clear video, audio format and bitrate, subtitle, metadata, and destination choices.
+- Offers clear video or audio, quality, container, audio format and bitrate, subtitle, metadata, and destination choices.
+- Exposes yt-dlp features as controls instead of command-line flags: exact stream picking, codec preference, subtitle conversion, chapters, SponsorBlock, side files, filename presets, parallel connections, and playlist date and item limits.
 - Remembers the last used download folder across app restarts and falls back when it is removed.
+- Shows every download in one list, filtered by Downloading, Completed, and Stopped, with details, progress, and errors in a side panel.
+- Starts a new download when a link is pasted anywhere in the window.
 - Persists the queue, history, settings, progress, errors, and diagnostics in SQLite.
 - Supports pause, reorder, retry, cancel, reveal, and open actions.
 - Restores queued work after a restart and marks unexpectedly stopped work as interrupted.

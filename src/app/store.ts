@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { appApi } from "../lib/api";
+import { filterFor, isVideoInPlaylist, type DownloadFilter } from "../lib/jobs";
 import type {
   AppSettings,
   AppSnapshot,
@@ -10,10 +11,16 @@ import type {
   HardwareAccelerationInfo,
 } from "../types/contracts";
 
-export type ViewName = "download" | "queue" | "history" | "settings";
+export type Page = "downloads" | "settings";
+export type Inspector = { kind: "job"; id: string } | null;
 
 interface AppState {
-  activeView: ViewName;
+  page: Page;
+  filter: DownloadFilter;
+  inspector: Inspector;
+  newDownloadOpen: boolean;
+  /** Link in the New download dialog; also filled by paste-anywhere. */
+  draftUrl: string;
   initialized: boolean;
   fatalError?: string;
   settings?: AppSettings;
@@ -26,9 +33,15 @@ interface AppState {
   isAnalyzing: boolean;
   analysisRevision: number;
   analyzeError?: string;
-  setView: (view: ViewName) => void;
+  showDownloads: (filter?: DownloadFilter) => void;
+  showSettings: () => void;
+  openNewDownload: (url?: string) => void;
+  closeNewDownload: () => void;
+  selectJob: (jobId: string) => void;
+  closeInspector: () => void;
+  setDraftUrl: (url: string) => void;
   initialize: () => Promise<void>;
-  analyze: (url: string) => Promise<void>;
+  analyze: (url: string, noPlaylist?: boolean) => Promise<void>;
   cancelAnalysis: () => Promise<void>;
   clearProbe: () => void;
   enqueue: (
@@ -38,24 +51,32 @@ interface AppState {
   updateJob: (job: DownloadJob) => void;
   cancel: (jobId: string) => Promise<void>;
   retry: (jobId: string) => Promise<void>;
-  removeQueueJob: (jobId: string) => Promise<void>;
+  removeJob: (jobId: string) => Promise<void>;
   clearCompleted: () => Promise<void>;
   reorder: (jobId: string, direction: "up" | "down") => Promise<void>;
   setPaused: (paused: boolean) => Promise<void>;
   saveSettings: (settings: AppSettings) => Promise<void>;
   rememberDownloadDirectory: (directory: string) => Promise<void>;
+  ensureHardwareAcceleration: () => void;
   refreshEngineStatus: () => Promise<void>;
-  removeHistory: (jobId: string) => Promise<void>;
 }
 
 function mergeJob(items: DownloadJob[], job: DownloadJob): DownloadJob[] {
   const index = items.findIndex((item) => item.id === job.id);
   if (index < 0) return [job, ...items];
-  return items.map((item) => (item.id === job.id ? job : item));
+  const next = items.slice();
+  next[index] = job;
+  return next;
 }
 
+let hardwareRequest: Promise<void> | undefined;
+
 export const useAppStore = create<AppState>((set, get) => ({
-  activeView: "queue",
+  page: "downloads",
+  filter: "all",
+  inspector: null,
+  newDownloadOpen: false,
+  draftUrl: "",
   initialized: false,
   dependencies: [],
   queue: [],
@@ -63,7 +84,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   queuePaused: false,
   isAnalyzing: false,
   analysisRevision: 0,
-  setView: (activeView) => set({ activeView }),
+  showDownloads: (filter) =>
+    set((state) => ({ page: "downloads", filter: filter ?? state.filter })),
+  showSettings: () => set({ page: "settings", inspector: null }),
+  openNewDownload: (url) => {
+    set({ page: "downloads", newDownloadOpen: true });
+    get().ensureHardwareAcceleration();
+    if (url) {
+      set({ draftUrl: url });
+      // A video inside a playlist starts as "just this video"; the dialog can widen it.
+      if (isVideoInPlaylist(url)) void get().analyze(url, true);
+      else void get().analyze(url);
+    }
+  },
+  closeNewDownload: () => {
+    if (get().isAnalyzing) void get().cancelAnalysis();
+    set({
+      newDownloadOpen: false,
+      draftUrl: "",
+      probe: undefined,
+      analyzeError: undefined,
+    });
+  },
+  selectJob: (jobId) => set({ inspector: { kind: "job", id: jobId } }),
+  closeInspector: () => set({ inspector: null }),
+  setDraftUrl: (draftUrl) => {
+    if (draftUrl === get().draftUrl) return;
+    set({ draftUrl, probe: undefined, analyzeError: undefined });
+  },
   initialize: async () => {
     try {
       const snapshot: AppSnapshot = await appApi.initialize();
@@ -73,7 +121,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ initialized: true, fatalError: String(error) });
     }
   },
-  analyze: async (url) => {
+  analyze: async (url, noPlaylist = false) => {
     const revision = get().analysisRevision + 1;
     set({
       isAnalyzing: true,
@@ -82,7 +130,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       analysisRevision: revision,
     });
     try {
-      const probe = await appApi.analyze(url);
+      const probe = await appApi.analyze(url, noPlaylist);
       if (get().analysisRevision === revision) set({ probe });
     } catch (error) {
       if (get().analysisRevision === revision)
@@ -103,61 +151,108 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearProbe: () => set({ probe: undefined, analyzeError: undefined }),
   enqueue: async (request, startImmediately) => {
     const job = await appApi.enqueue(request, startImmediately);
-    set((state) => ({ queue: mergeJob(state.queue, job) }));
+    set((state) => ({
+      queue: mergeJob(state.queue, job),
+      filter: state.filter === "all" ? "all" : "downloading",
+      draftUrl: "",
+      probe: undefined,
+      newDownloadOpen: false,
+      inspector: { kind: "job", id: job.id },
+    }));
     return job;
   },
   updateJob: (job) =>
     set((state) => ({
       queue: mergeJob(state.queue, job),
-      history: ["completed", "failed", "cancelled"].includes(job.status)
-        ? mergeJob(state.history, job)
-        : state.history,
+      history:
+        filterFor(job.status) !== "downloading" && job.status !== "interrupted"
+          ? mergeJob(state.history, job)
+          : state.history,
     })),
   cancel: async (jobId) => appApi.cancelJob(jobId),
   retry: async (jobId) => {
     const job = await appApi.retryJob(jobId);
-    set((state) => ({ queue: mergeJob(state.queue, job) }));
-  },
-  removeQueueJob: async (jobId) => {
-    await appApi.removeQueueJob(jobId);
     set((state) => ({
-      queue: state.queue.filter((item) => item.id !== jobId),
+      queue: mergeJob(state.queue, job),
+      inspector:
+        state.inspector?.kind === "job" && state.inspector.id === jobId
+          ? { kind: "job", id: job.id }
+          : state.inspector,
+    }));
+  },
+  removeJob: async (jobId) => {
+    const { queue, history } = get();
+    await Promise.all([
+      queue.some((job) => job.id === jobId) && appApi.removeQueueJob(jobId),
+      history.some((job) => job.id === jobId) && appApi.removeHistory(jobId),
+    ]);
+    set((state) => ({
+      queue: state.queue.filter((job) => job.id !== jobId),
+      history: state.history.filter((job) => job.id !== jobId),
+      inspector:
+        state.inspector?.kind === "job" && state.inspector.id === jobId
+          ? null
+          : state.inspector,
     }));
   },
   clearCompleted: async () => {
     await appApi.clearCompleted();
     set((state) => ({
-      queue: state.queue.filter((item) => item.status !== "completed"),
+      queue: state.queue.filter((job) => job.status !== "completed"),
+      history: state.history.filter((job) => job.status !== "completed"),
+      inspector: null,
     }));
   },
   reorder: async (jobId, direction) => {
-    await appApi.reorderJob(jobId, direction);
-    const snapshot = await appApi.initialize();
-    set({ queue: snapshot.queue });
+    const queue = await appApi.reorderJob(jobId, direction);
+    set({ queue });
   },
   setPaused: async (paused) => {
     await appApi.setQueuePaused(paused);
     set({ queuePaused: paused });
   },
   saveSettings: async (settings) => {
+    const previous = get().settings;
     const saved = await appApi.saveSettings(settings);
     set({ settings: saved });
+    if (
+      previous?.ytDlpPath !== saved.ytDlpPath ||
+      previous?.ffmpegPath !== saved.ffmpegPath ||
+      previous?.denoPath !== saved.denoPath
+    ) {
+      set({ dependencies: await appApi.refreshDependencies() });
+      if (previous?.ffmpegPath !== saved.ffmpegPath) {
+        set({
+          hardwareAcceleration: {
+            status: "checking",
+            encoders: [],
+            message: "Checking the installed GPU and driver for NVENC or AMF…",
+          },
+        });
+        get().ensureHardwareAcceleration();
+      }
+    }
   },
   rememberDownloadDirectory: async (directory) => {
     const settings = await appApi.rememberDownloadDirectory(directory);
     set({ settings });
   },
+  ensureHardwareAcceleration: () => {
+    if (get().hardwareAcceleration?.status !== "checking" || hardwareRequest)
+      return;
+    hardwareRequest = appApi
+      .refreshHardwareAcceleration(false)
+      .then((hardwareAcceleration) => set({ hardwareAcceleration }))
+      .catch(() => undefined)
+      .finally(() => {
+        hardwareRequest = undefined;
+      });
+  },
   refreshEngineStatus: async () => {
     const [dependencies, hardwareAcceleration] = await Promise.all([
       appApi.refreshDependencies(),
-      appApi.refreshHardwareAcceleration(),
+      appApi.refreshHardwareAcceleration(true),
     ]);
     set({ dependencies, hardwareAcceleration });
-  },
-  removeHistory: async (jobId) => {
-    await appApi.removeHistory(jobId);
-    set((state) => ({
-      history: state.history.filter((item) => item.id !== jobId),
-    }));
   },
 }));
