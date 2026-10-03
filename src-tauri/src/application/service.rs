@@ -727,6 +727,14 @@ fn validate_settings(settings: &AppSettings) -> AppResult<()> {
     if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
         return Err(AppError::Validation("Choose a supported theme".into()));
     }
+    if !matches!(
+        settings.accent.as_str(),
+        "blue" | "violet" | "pink" | "graphite"
+    ) {
+        return Err(AppError::Validation(
+            "Choose a supported accent color".into(),
+        ));
+    }
     if settings.filename_template.contains('/')
         || settings.filename_template.contains('\\')
         || settings.filename_template.trim().is_empty()
@@ -890,11 +898,25 @@ async fn restore_last_download_directory(settings: &mut AppSettings) -> bool {
 mod tests {
     use super::{
         EMIT_INTERVAL, JobPublisher, PERSIST_INTERVAL, cached_or_load,
-        restore_last_download_directory, validate_downloaded_file,
+        restore_last_download_directory, validate_downloaded_file, validate_settings,
     };
     use crate::domain::{AppSettings, JobStatus};
     use std::{fs, time::Duration};
     use tokio::{sync::RwLock, time::Instant};
+
+    #[test]
+    fn settings_accept_only_known_accent_colors() {
+        let mut settings = AppSettings {
+            download_directory: std::env::temp_dir().to_string_lossy().into_owned(),
+            ..AppSettings::default()
+        };
+        for accent in ["blue", "violet", "pink", "graphite"] {
+            settings.accent = accent.into();
+            assert!(validate_settings(&settings).is_ok(), "{accent} is offered");
+        }
+        settings.accent = "#ff00ff".into();
+        assert!(validate_settings(&settings).is_err());
+    }
 
     #[tokio::test]
     async fn an_empty_cache_is_filled_without_deadlocking() {

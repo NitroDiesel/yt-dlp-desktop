@@ -22,9 +22,12 @@
   --card: #111111;
   --foreground: #f5f5f5;
   --muted-foreground: #8a8a8a;
-  --primary: #346bf1;
-  --primary-hover: #3060d8;
-  --primary-foreground: #ffffff;
+  --primary: var(--tint-dark);
+  --primary-hover: var(--tint-dark-hover);
+  --primary-foreground: var(--tint-dark-fg);
+  --primary-surface: var(--tint-dark-surface);
+  --popover: #171717;
+  --popover-shadow: 0 10px 30px rgb(0 0 0 / 45%);
   --accent: rgb(255 255 255 / 4%);
   --muted: rgb(255 255 255 / 3%);
   --border: rgb(255 255 255 / 6%);
@@ -36,7 +39,7 @@
   --segment-active: #1e1e1f;
   --track: rgb(255 255 255 / 8%);
   --switch-off: rgb(255 255 255 / 16%);
-  --ring: #346bf1;
+  --ring: var(--tint-dark);
   --info: #60a5fa;
   --success: #34d399;
   --warning: #fbbf24;
@@ -46,7 +49,6 @@
   --info-surface: rgb(59 130 246 / 15%);
   --success-surface: rgb(16 185 129 / 14%);
   --shadow-overlay: -16px 0 40px rgb(0 0 0 / 45%);
-  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238a8a8a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 6.5 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
   --grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
 }
 
@@ -56,8 +58,12 @@
   --card: #fafafa;
   --foreground: #27272a;
   --muted-foreground: #71717a;
-  --primary: #1b4ed8;
-  --primary-hover: #1f47c0;
+  --primary: var(--tint-light);
+  --primary-hover: var(--tint-light-hover);
+  --primary-foreground: var(--tint-light-fg);
+  --primary-surface: var(--tint-light-surface);
+  --popover: #ffffff;
+  --popover-shadow: 0 10px 30px rgb(0 0 0 / 12%);
   --accent: #f4f4f5;
   --muted: #f4f4f5;
   --border: #e4e4e7;
@@ -69,7 +75,7 @@
   --segment-active: #ffffff;
   --track: #e4e4e7;
   --switch-off: #d4d4d8;
-  --ring: #1b4ed8;
+  --ring: var(--tint-light);
   --info: #1d4ed8;
   --success: #047857;
   --warning: #b45309;
@@ -89,8 +95,12 @@
     --card: #fafafa;
     --foreground: #27272a;
     --muted-foreground: #71717a;
-    --primary: #1b4ed8;
-    --primary-hover: #1f47c0;
+    --primary: var(--tint-light);
+    --primary-hover: var(--tint-light-hover);
+    --primary-foreground: var(--tint-light-fg);
+    --primary-surface: var(--tint-light-surface);
+    --popover: #ffffff;
+    --popover-shadow: 0 10px 30px rgb(0 0 0 / 12%);
     --accent: #f4f4f5;
     --muted: #f4f4f5;
     --border: #e4e4e7;
@@ -102,7 +112,7 @@
     --segment-active: #ffffff;
     --track: #e4e4e7;
     --switch-off: #d4d4d8;
-    --ring: #1b4ed8;
+    --ring: var(--tint-light);
     --info: #1d4ed8;
     --success: #047857;
     --warning: #b45309;
@@ -114,6 +124,53 @@
     --shadow-overlay: -16px 0 40px rgb(0 0 0 / 10%);
     --grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 128 128' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02745'/%3E%3C/svg%3E");
   }
+}
+
+/* Accent colors. Each sets a dark-theme and a light-theme shade; the theme
+   blocks above pick one. Swatches reuse these by carrying data-accent. */
+:root,
+[data-accent="blue"] {
+  --tint-dark: #346bf1;
+  --tint-dark-hover: #3060d8;
+  --tint-dark-fg: #ffffff;
+  --tint-dark-surface: rgb(59 130 246 / 15%);
+  --tint-light: #1b4ed8;
+  --tint-light-hover: #1f47c0;
+  --tint-light-fg: #ffffff;
+  --tint-light-surface: rgb(59 130 246 / 10%);
+}
+
+[data-accent="violet"] {
+  --tint-dark: #7c3aed;
+  --tint-dark-hover: #6d28d9;
+  --tint-dark-fg: #ffffff;
+  --tint-dark-surface: rgb(139 92 246 / 15%);
+  --tint-light: #6d28d9;
+  --tint-light-hover: #5b21b6;
+  --tint-light-fg: #ffffff;
+  --tint-light-surface: rgb(139 92 246 / 10%);
+}
+
+[data-accent="pink"] {
+  --tint-dark: #db2777;
+  --tint-dark-hover: #be185d;
+  --tint-dark-fg: #ffffff;
+  --tint-dark-surface: rgb(236 72 153 / 15%);
+  --tint-light: #be185d;
+  --tint-light-hover: #9d174d;
+  --tint-light-fg: #ffffff;
+  --tint-light-surface: rgb(236 72 153 / 10%);
+}
+
+[data-accent="graphite"] {
+  --tint-dark: #e4e4e7;
+  --tint-dark-hover: #d4d4d8;
+  --tint-dark-fg: #18181b;
+  --tint-dark-surface: rgb(255 255 255 / 8%);
+  --tint-light: #27272a;
+  --tint-light-hover: #3f3f46;
+  --tint-light-fg: #ffffff;
+  --tint-light-surface: rgb(0 0 0 / 6%);
 }
 
 /* ---------- Base ---------- */
@@ -161,7 +218,6 @@ h3 {
 
 button,
 input,
-select,
 textarea {
   font: inherit;
   color: inherit;
@@ -610,7 +666,6 @@ kbd {
 }
 
 input:not([type="checkbox"], [type="radio"], [type="range"]),
-select,
 textarea {
   width: 100%;
   min-width: 0;
@@ -635,7 +690,6 @@ textarea::placeholder {
 }
 
 input:focus-visible,
-select:focus-visible,
 textarea:focus-visible {
   border-color: var(--ring);
   outline: none;
@@ -646,20 +700,84 @@ input[aria-invalid="true"] {
   border-color: var(--error);
 }
 
-select {
-  width: auto;
+.select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 140px;
-  padding-right: 30px;
-  appearance: none;
-  background: var(--input-surface) var(--select-chevron) no-repeat right 8px center;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--input);
+  border-radius: var(--control-radius);
+  background: var(--input-surface);
+  font-size: 13px;
+  text-align: left;
 }
 
-/* The open list is a native popup that cannot be translucent. Without an
-   opaque surface it falls back to white under the light select text. */
-select option,
-select optgroup {
-  background-color: var(--card);
-  color: var(--foreground);
+.select:hover:not(:disabled) {
+  background: var(--input-hover);
+}
+
+.select:focus-visible,
+.select[aria-expanded="true"] {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+.select:disabled {
+  opacity: 0.5;
+}
+
+.select__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select__chevron {
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+/* Fixed so scrolling panels and the dialog body never clip it. */
+.select__list {
+  position: fixed;
+  z-index: 50;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--popover);
+  box-shadow: var(--popover-shadow);
+}
+
+.select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 30px;
+  padding: 0 8px 0 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.select__option[data-active] {
+  background: var(--input-hover);
+}
+
+.select__option[aria-disabled="true"] {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+
+.select__option svg {
+  flex: none;
 }
 
 input[type="checkbox"],
@@ -703,6 +821,7 @@ input[type="range"] {
 }
 
 .switch:checked::before {
+  background: var(--primary-foreground);
   transform: translateX(12px);
 }
 
@@ -1288,7 +1407,7 @@ input[type="range"] {
   min-width: 0;
 }
 
-.form-row__control select {
+.form-row__control .select {
   width: 100%;
 }
 
@@ -1339,7 +1458,7 @@ input[type="range"] {
 }
 
 /* Switches keep their own fixed size; only text-like fields shrink here. */
-.inline-field select,
+.inline-field .select,
 .inline-field input:not([type="checkbox"]) {
   width: auto;
   min-width: 0;
@@ -1383,7 +1502,7 @@ input[type="range"] {
 
 .chip:has(input:checked) {
   border-color: var(--primary);
-  background: var(--info-surface);
+  background: var(--primary-surface);
   color: var(--foreground);
 }
 
@@ -2098,8 +2217,40 @@ input[type="range"] {
   }
 }
 
+/* ---------- Sidebar toggle ---------- */
+
+/* Hidden sidebar: the stage and status bar take the full width. */
+.app--sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "stage"
+    "status";
+}
+
+.sidebar__toggle {
+  margin-left: auto;
+}
+
+.header-lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Sits where the sidebar edge was, in line with the header title. */
+.sidebar-reveal {
+  display: flex;
+  gap: 2px;
+  margin-left: -10px;
+}
+
 /* Small windows: the sidebar becomes an icon rail. */
 @media (max-width: 760px) {
+  .sidebar__toggle {
+    display: none;
+  }
+
   :root {
     --sidebar-width: 52px;
   }
@@ -2149,5 +2300,58 @@ input[type="range"] {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ---------- Accent picker ---------- */
+
+.accent-picker {
+  display: flex;
+  gap: 8px;
+}
+
+.accent-picker__option {
+  position: relative;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  place-items: center;
+}
+
+.accent-picker__option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.accent-picker__option:has(input:checked) {
+  box-shadow: 0 0 0 2px var(--foreground);
+}
+
+.accent-picker__option:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.accent-picker__swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--tint-dark);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%);
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .accent-picker__swatch {
+  background: var(--tint-light);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .accent-picker__swatch {
+    background: var(--tint-light);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
   }
 }

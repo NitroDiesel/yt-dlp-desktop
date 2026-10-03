@@ -11,6 +11,7 @@ import { useShallow } from "zustand/react/shallow";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { AlertCircle, ChevronDown, ChevronRight, X } from "lucide-react";
 import { useAppStore } from "../../app/store";
+import { Select } from "../../components/Select";
 import { Toggle } from "../../components/Toggle";
 import { formatBytes, formatDuration, hostname } from "../../lib/format";
 import { isVideoInPlaylist, linkFromText } from "../../lib/jobs";
@@ -206,39 +207,6 @@ function Segmented<T extends string>({
   );
 }
 
-function Select<T extends string>({
-  id,
-  label,
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  id: string;
-  /** Accessible name when no <label> points at the select. */
-  label?: string;
-  value: T;
-  options: ReadonlyArray<{ value: T; label: string; disabled?: boolean }>;
-  onChange: (value: T) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <select
-      id={id}
-      aria-label={label}
-      value={value}
-      disabled={disabled}
-      onChange={(event) => onChange(event.target.value as T)}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value} disabled={option.disabled}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 function GpuConversion({
   hardware,
   options,
@@ -276,25 +244,25 @@ function GpuConversion({
       />
       {conversion && (
         <div className="option-block__body">
-          <label className="field">
-            <span className="field__label">Video codec</span>
-            <select
+          <div className="field">
+            <label className="field__label" htmlFor="gpu-codec">
+              Video codec
+            </label>
+            <Select
+              id="gpu-codec"
               value={conversion.codec}
-              onChange={(event) => update({ codec: event.target.value as HardwareCodec })}
-            >
-              {(["h264", "hevc", "av1"] as const).map((codec) => {
+              onChange={(codec) => update({ codec })}
+              options={(["h264", "hevc", "av1"] as const).map((codec) => {
                 const encoder = encoderFor(codec);
-                return (
-                  <option key={codec} value={codec} disabled={!encoder}>
-                    {codecLabels[codec]}{" "}
-                    {encoder
-                      ? `(${encoder.provider === "nvenc" ? "NVIDIA NVENC" : "AMD AMF"})`
-                      : "(not supported)"}
-                  </option>
-                );
+                const provider = encoder?.provider === "nvenc" ? "NVIDIA NVENC" : "AMD AMF";
+                return {
+                  value: codec,
+                  label: `${codecLabels[codec]} ${encoder ? `(${provider})` : "(not supported)"}`,
+                  disabled: !encoder,
+                };
               })}
-            </select>
-          </label>
+            />
+          </div>
           <label className="field">
             <span className="field__label">
               Quality <span className="mono">{conversion.quality}</span>

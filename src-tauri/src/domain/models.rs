@@ -539,6 +539,9 @@ pub struct AppSettings {
     pub default_quality: String,
     pub queue_concurrency: u8,
     pub theme: String,
+    /// "blue", "violet", "pink", or "graphite"; settings saved before v0.1.11 lack it.
+    #[serde(default = "default_accent")]
+    pub accent: String,
     pub reduced_motion: bool,
     pub yt_dlp_path: Option<String>,
     pub ffmpeg_path: Option<String>,
@@ -571,6 +574,10 @@ pub struct AppSettings {
     pub use_download_time: bool,
 }
 
+fn default_accent() -> String {
+    "blue".into()
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         let download_directory = dirs::download_dir()
@@ -587,6 +594,7 @@ impl Default for AppSettings {
             default_quality: "best".into(),
             queue_concurrency: 1,
             theme: "system".into(),
+            accent: default_accent(),
             reduced_motion: false,
             yt_dlp_path: None,
             ffmpeg_path: None,
@@ -773,6 +781,7 @@ mod tests {
 
         let settings: AppSettings = serde_json::from_value(value).unwrap();
         assert!(settings.last_download_directory.is_none());
+        assert_eq!(settings.accent, "blue");
         assert!(settings.legacy_recent_download_directories.is_empty());
     }
 

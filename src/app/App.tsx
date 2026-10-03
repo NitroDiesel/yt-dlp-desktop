@@ -9,7 +9,7 @@ import { SettingsView } from "../features/settings/SettingsView";
 import { useAppStore } from "./store";
 
 export default function App() {
-  const { page, inspector, newDownloadOpen, initialized, fatalError, theme, reducedMotion } =
+  const { page, inspector, newDownloadOpen, initialized, fatalError, theme, accent, reducedMotion } =
     useAppStore(
       useShallow((state) => ({
         page: state.page,
@@ -18,6 +18,7 @@ export default function App() {
         initialized: state.initialized,
         fatalError: state.fatalError,
         theme: state.settings?.theme,
+        accent: state.settings?.accent,
         reducedMotion: state.settings?.reducedMotion,
       })),
     );
@@ -30,8 +31,9 @@ export default function App() {
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = theme ?? "system";
+    root.dataset.accent = accent ?? "blue";
     root.classList.toggle("reduce-motion", Boolean(reducedMotion));
-  }, [reducedMotion, theme]);
+  }, [accent, reducedMotion, theme]);
 
   if (!initialized) {
     return (

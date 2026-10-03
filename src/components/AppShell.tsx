@@ -6,6 +6,8 @@ import {
   CircleStop,
   Download,
   Layers,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Settings,
   type LucideIcon,
@@ -37,7 +39,7 @@ function isEditable(target: EventTarget | null): boolean {
   );
 }
 
-/** Ctrl/⌘+N, Ctrl/⌘+comma, Escape, and pasting a link anywhere outside a field. */
+/** Ctrl/⌘+N, Ctrl/⌘+comma, Ctrl/⌘+B, Escape, and pasting a link anywhere outside a field. */
 function useGlobalShortcuts() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -49,6 +51,9 @@ function useGlobalShortcuts() {
       } else if (modifier && event.key === ",") {
         event.preventDefault();
         store.showSettings();
+      } else if (modifier && !event.shiftKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        store.toggleSidebar();
       } else if (
         event.key === "Escape" &&
         store.inspector &&
@@ -75,17 +80,25 @@ function useGlobalShortcuts() {
 }
 
 function Sidebar() {
-  const { page, filter, newDownloadOpen, showDownloads, showSettings, openNewDownload } =
-    useAppStore(
-      useShallow((state) => ({
-        page: state.page,
-        filter: state.filter,
-        newDownloadOpen: state.newDownloadOpen,
-        showDownloads: state.showDownloads,
-        showSettings: state.showSettings,
-        openNewDownload: state.openNewDownload,
-      })),
-    );
+  const {
+    page,
+    filter,
+    newDownloadOpen,
+    showDownloads,
+    showSettings,
+    openNewDownload,
+    toggleSidebar,
+  } = useAppStore(
+    useShallow((state) => ({
+      page: state.page,
+      filter: state.filter,
+      newDownloadOpen: state.newDownloadOpen,
+      showDownloads: state.showDownloads,
+      showSettings: state.showSettings,
+      openNewDownload: state.openNewDownload,
+      toggleSidebar: state.toggleSidebar,
+    })),
+  );
   const counts = useAppStore(
     useShallow((state) => countDownloads(state.queue, state.history)),
   );
@@ -96,6 +109,15 @@ function Sidebar() {
         <span className="sidebar__label">
           yt-dlp <span>Desktop</span>
         </span>
+        <button
+          type="button"
+          className="icon-button sidebar__toggle"
+          aria-label="Hide sidebar"
+          title={`Hide sidebar (${modifierKey} B)`}
+          onClick={toggleSidebar}
+        >
+          <PanelLeftClose aria-hidden="true" />
+        </button>
       </div>
 
       <button
@@ -202,6 +224,43 @@ function StatusBar() {
   );
 }
 
+/**
+ * Shown at the start of each page header while the sidebar is hidden: the way
+ * back to the sidebar, and New download, which the sidebar would otherwise hold.
+ */
+export function SidebarReveal() {
+  const { collapsed, toggleSidebar, openNewDownload } = useAppStore(
+    useShallow((state) => ({
+      collapsed: state.sidebarCollapsed,
+      toggleSidebar: state.toggleSidebar,
+      openNewDownload: state.openNewDownload,
+    })),
+  );
+  if (!collapsed) return null;
+  return (
+    <div className="sidebar-reveal">
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Show sidebar"
+        title={`Show sidebar (${modifierKey} B)`}
+        onClick={toggleSidebar}
+      >
+        <PanelLeftOpen aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="New download"
+        title={`New download (${modifierKey} N)`}
+        onClick={() => openNewDownload()}
+      >
+        <Plus aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
 export function AppShell({
   children,
   inspector,
@@ -210,12 +269,13 @@ export function AppShell({
   inspector?: ReactNode;
 }) {
   useGlobalShortcuts();
+  const collapsed = useAppStore((state) => state.sidebarCollapsed);
   return (
-    <div className="app">
+    <div className={`app${collapsed ? " app--sidebar-collapsed" : ""}`}>
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <Sidebar />
+      {!collapsed && <Sidebar />}
       <div className={`stage ${inspector ? "stage--inspecting" : ""}`}>
         <main className="workspace" id="main-content" tabIndex={-1}>
           {children}

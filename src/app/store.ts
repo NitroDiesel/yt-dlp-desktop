@@ -19,6 +19,8 @@ interface AppState {
   filter: DownloadFilter;
   inspector: Inspector;
   newDownloadOpen: boolean;
+  /** Hidden sidebar; remembered on this device across launches. */
+  sidebarCollapsed: boolean;
   /** Link in the New download dialog; also filled by paste-anywhere. */
   draftUrl: string;
   initialized: boolean;
@@ -39,6 +41,7 @@ interface AppState {
   closeNewDownload: () => void;
   selectJob: (jobId: string) => void;
   closeInspector: () => void;
+  toggleSidebar: () => void;
   setDraftUrl: (url: string) => void;
   initialize: () => Promise<void>;
   analyze: (url: string, noPlaylist?: boolean) => Promise<void>;
@@ -61,6 +64,17 @@ interface AppState {
   refreshEngineStatus: () => Promise<void>;
 }
 
+/** Window-layout preference, so it lives with the webview rather than in app settings. */
+const SIDEBAR_KEY = "sidebar-collapsed";
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function mergeJob(items: DownloadJob[], job: DownloadJob): DownloadJob[] {
   const index = items.findIndex((item) => item.id === job.id);
   if (index < 0) return [job, ...items];
@@ -76,6 +90,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   filter: "all",
   inspector: null,
   newDownloadOpen: false,
+  sidebarCollapsed: readSidebarCollapsed(),
   draftUrl: "",
   initialized: false,
   dependencies: [],
@@ -108,6 +123,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   selectJob: (jobId) => set({ inspector: { kind: "job", id: jobId } }),
   closeInspector: () => set({ inspector: null }),
+  toggleSidebar: () => {
+    const sidebarCollapsed = !get().sidebarCollapsed;
+    set({ sidebarCollapsed });
+    try {
+      localStorage.setItem(SIDEBAR_KEY, String(sidebarCollapsed));
+    } catch {
+      // Storage can be unavailable; the toggle still works for this session.
+    }
+  },
   setDraftUrl: (draftUrl) => {
     if (draftUrl === get().draftUrl) return;
     set({ draftUrl, probe: undefined, analyzeError: undefined });

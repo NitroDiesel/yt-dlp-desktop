@@ -3,8 +3,11 @@ import { useShallow } from "zustand/react/shallow";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FileCog, FolderOpen, RefreshCw, Undo2 } from "lucide-react";
 import { useAppStore } from "../../app/store";
+import { SidebarReveal } from "../../components/AppShell";
+import { Select } from "../../components/Select";
 import { Toggle } from "../../components/Toggle";
 import type {
+  AccentColor,
   AppSettings,
   DependencyInfo,
   HardwareAccelerationInfo,
@@ -109,6 +112,13 @@ function ToolRow({ dependency }: { dependency: DependencyInfo }) {
 
 const codecNames = { h264: "H.264", hevc: "HEVC", av1: "AV1" } as const;
 
+const accentColors: ReadonlyArray<{ value: AccentColor; label: string }> = [
+  { value: "blue", label: "Blue" },
+  { value: "violet", label: "Violet" },
+  { value: "pink", label: "Pink" },
+  { value: "graphite", label: "Graphite" },
+];
+
 function gpuSummary(hardware?: HardwareAccelerationInfo): string {
   if (!hardware || hardware.status === "checking") return "Checking…";
   const ready = hardware.encoders.filter((encoder) => encoder.available);
@@ -208,7 +218,10 @@ export function SettingsView() {
   return (
     <div className="page">
       <header className="topbar">
-        <h1>Settings</h1>
+        <div className="header-lead">
+          <SidebarReveal />
+          <h1>Settings</h1>
+        </div>
       </header>
       <div className="settings">
         <Section title="Downloads" description="Defaults for new downloads. Each download can still change them.">
@@ -236,48 +249,45 @@ export function SettingsView() {
           <Row
             title="Default type"
             control={
-              <select
-                aria-label="Default type"
+              <Select
+                label="Default type"
                 value={draft.defaultMode}
-                onChange={(event) => set("defaultMode", event.target.value as AppSettings["defaultMode"])}
-              >
-                <option value="video">Video</option>
-                <option value="audio">Audio</option>
-              </select>
+                onChange={(mode) => set("defaultMode", mode)}
+                options={[
+                  { value: "video", label: "Video" },
+                  { value: "audio", label: "Audio" },
+                ]}
+              />
             }
           />
           <Row
             title="Default video quality"
             control={
-              <select
-                aria-label="Default video quality"
+              <Select
+                label="Default video quality"
                 value={draft.defaultQuality}
-                onChange={(event) => set("defaultQuality", event.target.value)}
-              >
-                <option value="best">Best available</option>
-                <option value="2160">Up to 2160p</option>
-                <option value="1440">Up to 1440p</option>
-                <option value="1080">Up to 1080p</option>
-                <option value="720">Up to 720p</option>
-                <option value="single">Best single file</option>
-              </select>
+                onChange={(quality) => set("defaultQuality", quality)}
+                options={[
+                  { value: "best", label: "Best available" },
+                  { value: "2160", label: "Up to 2160p" },
+                  { value: "1440", label: "Up to 1440p" },
+                  { value: "1080", label: "Up to 1080p" },
+                  { value: "720", label: "Up to 720p" },
+                  { value: "single", label: "Best single file" },
+                ]}
+              />
             }
           />
           <Row
             title="Downloads at once"
             description="More parallel downloads use more bandwidth and can trigger site rate limits."
             control={
-              <select
-                aria-label="Downloads at once"
-                value={draft.queueConcurrency}
-                onChange={(event) => set("queueConcurrency", Number(event.target.value))}
-              >
-                {[1, 2, 3, 4].map((count) => (
-                  <option key={count} value={count}>
-                    {count}
-                  </option>
-                ))}
-              </select>
+              <Select
+                label="Downloads at once"
+                value={String(draft.queueConcurrency)}
+                onChange={(count) => set("queueConcurrency", Number(count))}
+                options={["1", "2", "3", "4"].map((count) => ({ value: count, label: count }))}
+              />
             }
           />
           <div className="settings-row">
@@ -343,18 +353,17 @@ export function SettingsView() {
             title="Browser cookies"
             description="Lets yt-dlp read a signed-in browser session for private or age-restricted media."
             control={
-              <select
-                aria-label="Browser cookies"
+              <Select
+                label="Browser cookies"
                 value={draft.cookieBrowser ?? ""}
-                onChange={(event) => set("cookieBrowser", event.target.value || undefined)}
-              >
-                <option value="">None</option>
-                {["chrome", "edge", "firefox", "brave", "chromium", "opera", "vivaldi", "safari"].map((browser) => (
-                  <option key={browser} value={browser}>
-                    {browser[0].toUpperCase() + browser.slice(1)}
-                  </option>
-                ))}
-              </select>
+                onChange={(browser) => set("cookieBrowser", browser || undefined)}
+                options={[
+                  { value: "", label: "None" },
+                  ...["chrome", "edge", "firefox", "brave", "chromium", "opera", "vivaldi", "safari"].map(
+                    (browser) => ({ value: browser, label: browser[0].toUpperCase() + browser.slice(1) }),
+                  ),
+                ]}
+              />
             }
           />
           <Row
@@ -378,19 +387,18 @@ export function SettingsView() {
             title="Browser impersonation"
             description="Some sites block downloaders. This makes requests look like the chosen browser."
             control={
-              <select
-                aria-label="Browser impersonation"
+              <Select
+                label="Browser impersonation"
                 value={draft.impersonate ?? ""}
-                onChange={(event) =>
-                  set("impersonate", (event.target.value || undefined) as AppSettings["impersonate"])
-                }
-              >
-                <option value="">Off</option>
-                <option value="chrome">Chrome</option>
-                <option value="edge">Edge</option>
-                <option value="safari">Safari</option>
-                <option value="firefox">Firefox</option>
-              </select>
+                onChange={(browser) => set("impersonate", browser || undefined)}
+                options={[
+                  { value: "", label: "Off" },
+                  { value: "chrome", label: "Chrome" },
+                  { value: "edge", label: "Edge" },
+                  { value: "safari", label: "Safari" },
+                  { value: "firefox", label: "Firefox" },
+                ]}
+              />
             }
           />
           <Row
@@ -398,24 +406,22 @@ export function SettingsView() {
             description="Ask sites to treat you as being in another country, for region-locked media."
             control={
               <div className="control-pair">
-                <select
-                  aria-label="Region bypass"
+                <Select
+                  label="Region bypass"
                   value={
-                    draft.geoBypass === undefined || draft.geoBypass === "default" || draft.geoBypass === "never"
-                      ? (draft.geoBypass ?? "")
-                      : "country"
+                    draft.geoBypass === undefined || draft.geoBypass === "default"
+                      ? ""
+                      : draft.geoBypass === "never"
+                        ? "never"
+                        : "country"
                   }
-                  onChange={(event) =>
-                    set(
-                      "geoBypass",
-                      event.target.value === "country" ? "US" : event.target.value || undefined,
-                    )
-                  }
-                >
-                  <option value="">Automatic</option>
-                  <option value="never">Off</option>
-                  <option value="country">Specific country</option>
-                </select>
+                  onChange={(mode) => set("geoBypass", mode === "country" ? "US" : mode || undefined)}
+                  options={[
+                    { value: "", label: "Automatic" },
+                    { value: "never", label: "Off" },
+                    { value: "country", label: "Specific country" },
+                  ]}
+                />
                 {draft.geoBypass !== undefined && !["default", "never"].includes(draft.geoBypass) && (
                   <input
                     className="mono input--narrow"
@@ -432,68 +438,66 @@ export function SettingsView() {
             title="IP version"
             description="Force IPv4 or IPv6 when a site misbehaves on one of them."
             control={
-              <select
-                aria-label="IP version"
+              <Select
+                label="IP version"
                 value={draft.ipVersion ?? ""}
-                onChange={(event) =>
-                  set("ipVersion", (event.target.value || undefined) as AppSettings["ipVersion"])
-                }
-              >
-                <option value="">Automatic</option>
-                <option value="ipv4">IPv4 only</option>
-                <option value="ipv6">IPv6 only</option>
-              </select>
+                onChange={(version) => set("ipVersion", version || undefined)}
+                options={[
+                  { value: "", label: "Automatic" },
+                  { value: "ipv4", label: "IPv4 only" },
+                  { value: "ipv6", label: "IPv6 only" },
+                ]}
+              />
             }
           />
           <Row
             title="Timeout"
             description="How long to wait for a server before giving up."
             control={
-              <select
-                aria-label="Network timeout"
+              <Select
+                label="Network timeout"
                 value={String(draft.socketTimeout ?? "")}
-                onChange={(event) =>
-                  set("socketTimeout", event.target.value ? Number(event.target.value) : undefined)
-                }
-              >
-                <option value="">Default (20 seconds)</option>
-                <option value="10">10 seconds</option>
-                <option value="60">1 minute</option>
-                <option value="180">3 minutes</option>
-              </select>
+                onChange={(seconds) => set("socketTimeout", seconds ? Number(seconds) : undefined)}
+                options={[
+                  { value: "", label: "Default (20 seconds)" },
+                  { value: "10", label: "10 seconds" },
+                  { value: "60", label: "1 minute" },
+                  { value: "180", label: "3 minutes" },
+                ]}
+              />
             }
           />
           <Row
             title="Pause between requests"
             description="Slows analysis and downloads slightly to avoid site rate limits."
             control={
-              <select
-                aria-label="Pause between requests"
+              <Select
+                label="Pause between requests"
                 value={String(draft.sleepRequests ?? 0)}
-                onChange={(event) => set("sleepRequests", Number(event.target.value) || undefined)}
-              >
-                <option value="0">No pause</option>
-                <option value="1">1 second</option>
-                <option value="3">3 seconds</option>
-                <option value="10">10 seconds</option>
-              </select>
+                onChange={(seconds) => set("sleepRequests", Number(seconds) || undefined)}
+                options={[
+                  { value: "0", label: "No pause" },
+                  { value: "1", label: "1 second" },
+                  { value: "3", label: "3 seconds" },
+                  { value: "10", label: "10 seconds" },
+                ]}
+              />
             }
           />
           <Row
             title="Download in chunks"
             description="Splits large files into smaller requests, which some sites throttle less."
             control={
-              <select
-                aria-label="Chunk size"
+              <Select
+                label="Chunk size"
                 value={String(draft.httpChunkSizeMb ?? "")}
-                onChange={(event) =>
-                  set("httpChunkSizeMb", event.target.value ? Number(event.target.value) : undefined)
-                }
-              >
-                <option value="">Off</option>
-                <option value="10">10 MB</option>
-                <option value="50">50 MB</option>
-              </select>
+                onChange={(size) => set("httpChunkSizeMb", size ? Number(size) : undefined)}
+                options={[
+                  { value: "", label: "Off" },
+                  { value: "10", label: "10 MB" },
+                  { value: "50", label: "50 MB" },
+                ]}
+              />
             }
           />
           <Row
@@ -611,15 +615,37 @@ export function SettingsView() {
           <Row
             title="Theme"
             control={
-              <select
-                aria-label="Theme"
+              <Select
+                label="Theme"
                 value={draft.theme}
-                onChange={(event) => set("theme", event.target.value as AppSettings["theme"])}
-              >
-                <option value="system">Match system</option>
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </select>
+                onChange={(theme) => set("theme", theme)}
+                options={[
+                  { value: "system", label: "Match system" },
+                  { value: "dark", label: "Dark" },
+                  { value: "light", label: "Light" },
+                ]}
+              />
+            }
+          />
+          <Row
+            title="Accent color"
+            description="Buttons, progress, switches, and focus."
+            control={
+              <div className="accent-picker" role="radiogroup" aria-label="Accent color">
+                {accentColors.map((accent) => (
+                  <label key={accent.value} className="accent-picker__option" title={accent.label}>
+                    <input
+                      type="radio"
+                      name="accent-color"
+                      value={accent.value}
+                      aria-label={accent.label}
+                      checked={draft.accent === accent.value}
+                      onChange={() => set("accent", accent.value)}
+                    />
+                    <span className="accent-picker__swatch" data-accent={accent.value} aria-hidden="true" />
+                  </label>
+                ))}
+              </div>
             }
           />
           <div className="settings-row">
