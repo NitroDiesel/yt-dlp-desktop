@@ -1338,8 +1338,9 @@ input[type="range"] {
   font-size: 12px;
 }
 
+/* Switches keep their own fixed size; only text-like fields shrink here. */
 .inline-field select,
-.inline-field input {
+.inline-field input:not([type="checkbox"]) {
   width: auto;
   min-width: 0;
 }
