@@ -654,6 +654,14 @@ select {
   background: var(--input-surface) var(--select-chevron) no-repeat right 8px center;
 }
 
+/* The open list is a native popup that cannot be translucent. Without an
+   opaque surface it falls back to white under the light select text. */
+select option,
+select optgroup {
+  background-color: var(--card);
+  color: var(--foreground);
+}
+
 input[type="checkbox"],
 input[type="radio"],
 input[type="range"] {
