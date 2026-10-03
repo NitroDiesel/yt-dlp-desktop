@@ -46,6 +46,7 @@ const snapshot: AppSnapshot = {
     defaultQuality: "best",
     queueConcurrency: 2,
     theme: "dark",
+    accent: "blue",
     reducedMotion: false,
     retries: 10,
     fragmentRetries: 10,

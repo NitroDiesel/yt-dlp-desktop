@@ -3,6 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { ClipboardPaste, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { useAppStore } from "../../app/store";
+import { SidebarReveal } from "../../components/AppShell";
 import {
   filterFor,
   filterLabels,
@@ -90,10 +91,13 @@ export function QueueView() {
   return (
     <div className="page">
       <header className="downloads-header">
-        <h1>
-          {filterLabels[filter]}
-          <span className="count-badge">{jobs.length}</span>
-        </h1>
+        <div className="header-lead">
+          <SidebarReveal />
+          <h1>
+            {filterLabels[filter]}
+            <span className="count-badge">{jobs.length}</span>
+          </h1>
+        </div>
         <div className="topbar__actions">
           {filter === "completed" && jobs.length > 0 && (
             <button

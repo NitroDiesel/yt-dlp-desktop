@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../../app/store";
+import { chooseOption } from "../../test/select";
 import type { AppSettings, MediaProbe } from "../../types/contracts";
 import { NewDownloadDialog } from "./NewDownloadDialog";
 
@@ -16,6 +17,7 @@ const settings: AppSettings = {
   defaultQuality: "best",
   queueConcurrency: 1,
   theme: "system",
+  accent: "blue",
   reducedMotion: false,
   retries: 10,
   fragmentRetries: 10,
@@ -113,7 +115,7 @@ describe("NewDownloadDialog", () => {
     expect(
       screen.getByRole("heading", { name: "A useful test video" }),
     ).toBeVisible();
-    expect(screen.getByLabelText("Quality")).toHaveValue("best");
+    expect(screen.getByLabelText("Quality")).toHaveAttribute("data-value", "best");
 
     await user.click(screen.getByRole("radio", { name: "Audio only" }));
     expect(screen.getByLabelText("Audio format")).toBeVisible();
@@ -133,8 +135,8 @@ describe("NewDownloadDialog", () => {
     render(<NewDownloadDialog />);
 
     await user.click(screen.getByRole("radio", { name: "Audio only" }));
-    await user.selectOptions(screen.getByLabelText("Audio format"), "mp3");
-    await user.selectOptions(screen.getByLabelText("Bitrate"), "320K");
+    await chooseOption(user, screen.getByLabelText("Audio format"), "mp3");
+    await chooseOption(user, screen.getByLabelText("Bitrate"), "320K");
     await user.click(screen.getByRole("button", { name: "Download" }));
 
     expect(enqueue).toHaveBeenCalledWith(
@@ -234,11 +236,12 @@ describe("NewDownloadDialog", () => {
       screen.getByRole("switch", { name: "GPU conversion" }),
     );
 
-    expect(screen.getByLabelText("Video codec")).toHaveValue("h264");
+    expect(screen.getByLabelText("Video codec")).toHaveAttribute("data-value", "h264");
     expect(
       screen.getByRole("switch", { name: "Hardware decoding" }),
     ).toBeEnabled();
-    expect(screen.getByRole("option", { name: /AV1/ })).toBeDisabled();
+    await user.click(screen.getByLabelText("Video codec"));
+    expect(screen.getByRole("option", { name: /AV1/ })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("adds an accurate selected timeframe to the download request", async () => {
@@ -302,10 +305,11 @@ describe("NewDownloadDialog", () => {
       screen.getByRole("switch", { name: "GPU conversion" }),
     );
 
-    expect(screen.getByRole("option", { name: /AMD AMF/ })).toBeEnabled();
     expect(
       screen.getByRole("switch", { name: "Hardware decoding" }),
     ).toBeDisabled();
+    await user.click(screen.getByLabelText("Video codec"));
+    expect(screen.getByRole("option", { name: /AMD AMF/ })).not.toHaveAttribute("aria-disabled");
   });
 
   it("restores and updates the last used download folder without a history menu", async () => {
@@ -367,15 +371,15 @@ describe("NewDownloadDialog", () => {
     useAppStore.setState({ enqueue });
     render(<NewDownloadDialog />);
 
-    await user.selectOptions(screen.getByLabelText("Container"), "mp4");
+    await chooseOption(user, screen.getByLabelText("Container"), "mp4");
     await user.click(screen.getByRole("button", { name: "Advanced" }));
-    await user.selectOptions(screen.getByLabelText("Video codec"), "h264");
-    await user.selectOptions(screen.getByLabelText("SponsorBlock"), "remove");
+    await chooseOption(user, screen.getByLabelText("Video codec"), "h264");
+    await chooseOption(user, screen.getByLabelText("SponsorBlock"), "remove");
     await user.click(screen.getByRole("checkbox", { name: "Intros" }));
     await user.click(screen.getByRole("switch", { name: "Embed chapter markers" }));
     await user.click(screen.getByRole("switch", { name: "Thumbnail image" }));
-    await user.selectOptions(screen.getByLabelText("Connections"), "4");
-    await user.selectOptions(screen.getByLabelText("File"), "uploader");
+    await chooseOption(user, screen.getByLabelText("Connections"), "4");
+    await chooseOption(user, screen.getByLabelText("File"), "uploader");
     await user.click(screen.getByRole("button", { name: "Download" }));
 
     expect(enqueue).toHaveBeenCalledWith(
@@ -411,10 +415,10 @@ describe("NewDownloadDialog", () => {
     });
     render(<NewDownloadDialog />);
 
-    await user.selectOptions(screen.getByLabelText("Quality"), "pick");
-    expect(screen.getByLabelText("Video stream")).toHaveValue("137");
-    expect(screen.getByLabelText("Audio stream")).toHaveValue("140");
-    await user.selectOptions(screen.getByLabelText("Video stream"), "248");
+    await chooseOption(user, screen.getByLabelText("Quality"), "pick");
+    expect(screen.getByLabelText("Video stream")).toHaveAttribute("data-value", "137");
+    expect(screen.getByLabelText("Audio stream")).toHaveAttribute("data-value", "140");
+    await chooseOption(user, screen.getByLabelText("Video stream"), "248");
     await user.click(screen.getByRole("button", { name: "Download" }));
 
     expect(enqueue).toHaveBeenCalledWith(
@@ -430,7 +434,7 @@ describe("NewDownloadDialog", () => {
     render(<NewDownloadDialog />);
 
     await user.click(screen.getByRole("button", { name: "Advanced" }));
-    await user.selectOptions(screen.getByLabelText("SponsorBlock"), "mark");
+    await chooseOption(user, screen.getByLabelText("SponsorBlock"), "mark");
     await user.click(screen.getByRole("checkbox", { name: "Sponsors" }));
 
     expect(screen.getByText("Choose at least one kind of segment.")).toBeVisible();
@@ -476,7 +480,7 @@ describe("NewDownloadDialog", () => {
     });
     render(<NewDownloadDialog />);
 
-    await user.selectOptions(screen.getByLabelText("Audio track"), "ja");
+    await chooseOption(user, screen.getByLabelText("Audio track"), "ja");
     await user.click(screen.getByRole("button", { name: "Advanced" }));
     await user.click(screen.getByRole("switch", { name: "Download available subtitles" }));
     await user.click(screen.getByRole("checkbox", { name: /^French/ }));
@@ -501,10 +505,10 @@ describe("NewDownloadDialog", () => {
     render(<NewDownloadDialog />);
 
     await user.click(screen.getByRole("button", { name: "Advanced" }));
-    await user.selectOptions(screen.getByLabelText("Order"), "reverse");
+    await chooseOption(user, screen.getByLabelText("Order"), "reverse");
     await user.type(screen.getByLabelText("Uploaded on or after"), "2026-01-15");
     await user.type(screen.getByLabelText("Maximum file size in megabytes"), "500");
-    await user.selectOptions(screen.getByLabelText(/Skip videos shorter than/), "180");
+    await chooseOption(user, screen.getByLabelText(/Skip videos shorter than/), "180");
     await user.click(screen.getByRole("switch", { name: "Skip live streams and premieres" }));
     await user.type(screen.getByLabelText("Maximum number of items"), "20");
     await user.type(screen.getByLabelText("Referer"), "https://example.com/embed");

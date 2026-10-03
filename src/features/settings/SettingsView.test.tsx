@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../../app/store";
+import { chooseOption } from "../../test/select";
 import type { AppSettings, DependencyInfo } from "../../types/contracts";
 import { SettingsView } from "./SettingsView";
 
@@ -15,6 +16,7 @@ const settings: AppSettings = {
   defaultQuality: "best",
   queueConcurrency: 1,
   theme: "system",
+  accent: "blue",
   reducedMotion: false,
   retries: 10,
   fragmentRetries: 10,
@@ -99,20 +101,36 @@ describe("SettingsView", () => {
     expect(
       screen.queryByRole("region", { name: "Unsaved changes" }),
     ).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Downloads at once"), "3");
+    await chooseOption(user, screen.getByLabelText("Downloads at once"), "3");
     expect(screen.getByRole("region", { name: "Unsaved changes" })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Discard" }));
-    expect(screen.getByLabelText("Downloads at once")).toHaveValue("1");
+    expect(screen.getByLabelText("Downloads at once")).toHaveAttribute("data-value", "1");
     expect(
       screen.queryByRole("region", { name: "Unsaved changes" }),
     ).not.toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Theme"), "dark");
+    await chooseOption(user, screen.getByLabelText("Theme"), "dark");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     expect(saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({ theme: "dark" }),
     );
+  });
+
+  it("saves the accent color picked from the swatches", async () => {
+    const user = userEvent.setup();
+    const saveSettings = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({ saveSettings });
+    render(<SettingsView />);
+
+    const accents = screen.getByRole("radiogroup", { name: "Accent color" });
+    expect(screen.getByRole("radio", { name: "Blue" })).toBeChecked();
+    await user.click(screen.getByRole("radio", { name: "Violet" }));
+    expect(screen.getByRole("radio", { name: "Violet" })).toBeChecked();
+    expect(accents).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ accent: "violet" }));
   });
 
   it("saves network options chosen from controls", async () => {
@@ -121,11 +139,11 @@ describe("SettingsView", () => {
     useAppStore.setState({ saveSettings });
     render(<SettingsView />);
 
-    await user.selectOptions(screen.getByLabelText("Browser impersonation"), "chrome");
-    await user.selectOptions(screen.getByLabelText("Region bypass"), "country");
+    await chooseOption(user, screen.getByLabelText("Browser impersonation"), "chrome");
+    await chooseOption(user, screen.getByLabelText("Region bypass"), "country");
     await user.clear(screen.getByLabelText("Country code"));
     await user.type(screen.getByLabelText("Country code"), "jp");
-    await user.selectOptions(screen.getByLabelText("IP version"), "ipv4");
+    await chooseOption(user, screen.getByLabelText("IP version"), "ipv4");
     await user.click(screen.getByRole("switch", { name: "Date files by download time" }));
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 

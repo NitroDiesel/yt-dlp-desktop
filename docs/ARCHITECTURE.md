@@ -46,6 +46,8 @@ Application service ───── Queue scheduler
 
 The database lives in the per-user Tauri application-data directory. Jobs, settings, dependency metadata, and the bounded diagnostic tail are transactional. At startup, work left in an active state is marked `interrupted`; queued work is scheduled again. Completed and failed records remain in history until the user removes them. The UI shows the queue and history as one downloads list; "Clear list" in the Completed view removes completed records from both, never the files.
 
+Settings are one JSON document; fields added after a release carry serde defaults, so older saved settings still load (for example, a missing accent color reads as Blue). The one exception to SQLite is whether the sidebar is hidden: it is a window-layout preference, kept in the webview's local storage and never sent to Rust.
+
 ## Resource use
 
 - Tool version checks run concurrently once per launch and again only on "Check again" or when a custom tool path changes.

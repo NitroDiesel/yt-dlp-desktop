@@ -163,6 +163,9 @@ export interface DownloadJob {
   diagnostics: string[];
 }
 
+/** Highlight color for primary buttons, progress, switches, and focus rings. */
+export type AccentColor = "blue" | "violet" | "pink" | "graphite";
+
 export interface AppSettings {
   downloadDirectory: string;
   lastDownloadDirectory?: string;
@@ -171,6 +174,7 @@ export interface AppSettings {
   defaultQuality: string;
   queueConcurrency: number;
   theme: "system" | "light" | "dark";
+  accent: AccentColor;
   reducedMotion: boolean;
   ytDlpPath?: string;
   ffmpegPath?: string;
