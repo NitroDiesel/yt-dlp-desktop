@@ -19,7 +19,7 @@ Audited against the local upstream source tree at `D:\Coding2.0\yt-dlp-master`, 
 | Best single file | `-f b` | Explicit no-merge mode. |
 | Pick exact streams | `-f <video>+<audio>` | Chosen from the video-only and audio-only formats in the analysis result. |
 | Container | `--merge-output-format mp4\|mkv\|webm` | Video only. Requires FFmpeg. |
-| Video codec preference | `-S vcodec:avc\|vp9\|av01` | Video only; sorts candidates within the chosen quality. |
+| Video codec preference | `-S vcodec:avc\|vp9\|av01` | Video only; sorts candidates within the chosen quality. The "Download as" group of the Video codec list, which it shares with GPU conversion. |
 | Source audio | `-f ba/b` | No conversion. |
 | Converted audio | `-x --audio-format <format> --audio-quality <0\|bitrate>` | Best conversion quality uses `0`; MP3, M4A, and Opus also offer 320K, 256K, 192K, and 128K. Rejected before enqueue when FFmpeg is unavailable. |
 | Human subtitles | `--write-subs` | Languages use `--sub-langs`. |
@@ -45,7 +45,7 @@ Audited against the local upstream source tree at `D:\Coding2.0\yt-dlp-master`, 
 | Retries | `--retries <n> --fragment-retries <n>` | App-level retry creates a clean new attempt. |
 | Progress | `--newline --progress-template ...` | Parsed from an app-owned sentinel prefix. |
 | Final output | `--print after_move:...` | Used to persist the completed file path. |
-| Automatic GPU conversion | direct `ffmpeg` argv using the first working NVENC or AMF encoder for the requested codec | Default off. The provider is never persisted or manually selected. Writes a new MKV; source is removed only after success. |
+| Automatic GPU conversion | direct `ffmpeg` argv using the first working NVENC or AMF encoder for the requested codec | Default off. Chosen from the "Convert on GPU" group of the Video codec list, which shows codecs the GPU cannot encode as disabled. The provider is never persisted or manually selected. Writes a new MKV; source is removed only after success. |
 | GPU decode | provider-specific hardware decode arguments | Advanced opt-in shown only after a real runtime decode probe; software decode remains the compatibility fallback. |
 
 ## Full option coverage

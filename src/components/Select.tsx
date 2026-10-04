@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from "lucide-react";
 import {
+  Fragment,
   useEffect,
   useId,
   useLayoutEffect,
@@ -13,6 +14,8 @@ export type SelectOption<T extends string> = {
   value: T;
   label: string;
   disabled?: boolean;
+  /** Heading shown above the first option of each run of the same group. */
+  group?: string;
 };
 
 /**
@@ -209,21 +212,27 @@ export function Select<T extends string>({
           onMouseDown={(event) => event.preventDefault()}
         >
           {options.map((option, index) => (
-            <li
-              key={option.value}
-              id={optionId(index)}
-              role="option"
-              className="select__option"
-              aria-selected={option.value === value}
-              aria-disabled={option.disabled || undefined}
-              data-value={option.value}
-              data-active={index === active || undefined}
-              onClick={() => choose(index)}
-              onMouseMove={() => !option.disabled && index !== active && setActive(index)}
-            >
-              <span>{option.label}</span>
-              {option.value === value && <Check size={14} aria-hidden="true" />}
-            </li>
+            <Fragment key={option.value}>
+              {option.group && option.group !== options[index - 1]?.group && (
+                <li role="presentation" className="select__group">
+                  {option.group}
+                </li>
+              )}
+              <li
+                id={optionId(index)}
+                role="option"
+                className="select__option"
+                aria-selected={option.value === value}
+                aria-disabled={option.disabled || undefined}
+                data-value={option.value}
+                data-active={index === active || undefined}
+                onClick={() => choose(index)}
+                onMouseMove={() => !option.disabled && index !== active && setActive(index)}
+              >
+                <span>{option.label}</span>
+                {option.value === value && <Check size={14} aria-hidden="true" />}
+              </li>
+            </Fragment>
           ))}
         </ul>
       )}
