@@ -228,20 +228,45 @@ describe("NewDownloadDialog", () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it("offers detected GPU codecs as an automatic conversion step", async () => {
+  it("lists the detected GPU encoders beside the download codecs", async () => {
+    const user = userEvent.setup();
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({ enqueue });
+    render(<NewDownloadDialog />);
+
+    await user.click(screen.getByLabelText("Video codec"));
+    expect(screen.getByText("Download as")).toBeVisible();
+    expect(screen.getByText("Convert on GPU (NVIDIA NVENC)")).toBeVisible();
+    expect(screen.getByRole("option", { name: "AV1 on GPU (not supported here)" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    await user.click(screen.getByRole("option", { name: "H.264 on GPU" }));
+
+    expect(screen.getByLabelText("Video codec")).toHaveAttribute("data-value", "gpu:h264");
+    expect(screen.getByRole("switch", { name: "Hardware decoding" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Download" }));
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          codecPreference: undefined,
+          videoConversion: { codec: "h264", quality: 23, useHardwareDecode: false },
+        }),
+      }),
+      true,
+    );
+  });
+
+  it("drops GPU options when a download codec is chosen again", async () => {
     const user = userEvent.setup();
     render(<NewDownloadDialog />);
 
-    await user.click(
-      screen.getByRole("switch", { name: "GPU conversion" }),
-    );
+    await chooseOption(user, screen.getByLabelText("Video codec"), "gpu:h264");
+    expect(screen.getByRole("switch", { name: "Hardware decoding" })).toBeVisible();
+    await chooseOption(user, screen.getByLabelText("Video codec"), "vp9");
 
-    expect(screen.getByLabelText("Video codec")).toHaveAttribute("data-value", "h264");
-    expect(
-      screen.getByRole("switch", { name: "Hardware decoding" }),
-    ).toBeEnabled();
-    await user.click(screen.getByLabelText("Video codec"));
-    expect(screen.getByRole("option", { name: /AV1/ })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByLabelText("Video codec")).toHaveAttribute("data-value", "vp9");
+    expect(screen.queryByRole("switch", { name: "Hardware decoding" })).not.toBeInTheDocument();
   });
 
   it("adds an accurate selected timeframe to the download request", async () => {
@@ -301,15 +326,13 @@ describe("NewDownloadDialog", () => {
     });
     render(<NewDownloadDialog />);
 
-    await user.click(
-      screen.getByRole("switch", { name: "GPU conversion" }),
-    );
+    await user.click(screen.getByLabelText("Video codec"));
+    expect(screen.getByText("Convert on GPU (AMD AMF)")).toBeVisible();
+    await user.click(screen.getByRole("option", { name: "H.264 on GPU" }));
 
     expect(
       screen.getByRole("switch", { name: "Hardware decoding" }),
     ).toBeDisabled();
-    await user.click(screen.getByLabelText("Video codec"));
-    expect(screen.getByRole("option", { name: /AMD AMF/ })).not.toHaveAttribute("aria-disabled");
   });
 
   it("restores and updates the last used download folder without a history menu", async () => {

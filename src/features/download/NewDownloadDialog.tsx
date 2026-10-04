@@ -11,7 +11,7 @@ import { useShallow } from "zustand/react/shallow";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { AlertCircle, ChevronDown, ChevronRight, X } from "lucide-react";
 import { useAppStore } from "../../app/store";
-import { Select } from "../../components/Select";
+import { Select, type SelectOption } from "../../components/Select";
 import { Toggle } from "../../components/Toggle";
 import { formatBytes, formatDuration, hostname } from "../../lib/format";
 import { isVideoInPlaylist, linkFromText } from "../../lib/jobs";
@@ -24,6 +24,7 @@ import type {
   DownloadRequest,
   HardwareAccelerationInfo,
   HardwareCodec,
+  HardwareEncoderProvider,
   MediaFormat,
   MediaProbe,
   SponsorCategory,
@@ -103,10 +104,15 @@ const filenamePresets = [
   { value: "index", label: "Playlist number - Title", template: "%(playlist_index)03d - %(title).180B.%(ext)s" },
 ];
 
-const codecLabels: Record<HardwareCodec, string> = {
-  h264: "H.264, most compatible",
-  hevc: "HEVC, smaller files",
-  av1: "AV1, newest GPUs",
+const gpuCodecLabels: Record<HardwareCodec, string> = {
+  h264: "H.264 on GPU",
+  hevc: "HEVC on GPU, smaller files",
+  av1: "AV1 on GPU",
+};
+
+const providerNames: Record<HardwareEncoderProvider, string> = {
+  nvenc: "NVIDIA NVENC",
+  amf: "AMD AMF",
 };
 
 const defaultOptions: DownloadOptions = {
@@ -207,62 +213,84 @@ function Segmented<T extends string>({
   );
 }
 
-function GpuConversion({
+type CodecChoice = CodecPreference | "" | `gpu:${HardwareCodec}`;
+
+/**
+ * One codec choice: which version to download from the site, or a GPU encoder
+ * (NVIDIA NVENC or AMD AMF) to re-encode with after downloading. GPU choices
+ * bring up their quality and decoding options.
+ */
+function VideoCodec({
   hardware,
   options,
   setOptions,
+  isPlaylist,
 }: {
-  hardware: HardwareAccelerationInfo;
+  hardware?: HardwareAccelerationInfo;
   options: DownloadOptions;
   setOptions: (options: DownloadOptions) => void;
+  isPlaylist: boolean;
 }) {
-  const conversion = options.videoConversion;
+  const conversion = isPlaylist ? undefined : options.videoConversion;
   const encoderFor = (codec: HardwareCodec) =>
-    hardware.encoders.find((encoder) => encoder.codec === codec && encoder.available);
+    hardware?.encoders.find((encoder) => encoder.codec === codec && encoder.available);
   const selected = conversion ? encoderFor(conversion.codec) : undefined;
+  const providers = new Set(
+    hardware?.encoders.filter((encoder) => encoder.available).map((encoder) => encoder.provider),
+  );
+  const vendor = [...providers].map((provider) => providerNames[provider]).join(", ");
+  const unavailable = isPlaylist
+    ? "one video at a time"
+    : !hardware || hardware.status === "checking"
+      ? "checking the GPU"
+      : "not supported here";
   const update = (patch: Partial<NonNullable<DownloadOptions["videoConversion"]>>) =>
     conversion && setOptions({ ...options, videoConversion: { ...conversion, ...patch } });
 
+  const choices: ReadonlyArray<SelectOption<CodecChoice>> = [
+    ...codecOptions.map((option) => ({ ...option, group: "Download as" })),
+    ...(["h264", "hevc", "av1"] as const).map((codec) => ({
+      value: `gpu:${codec}` as const,
+      label: encoderFor(codec) && !isPlaylist ? gpuCodecLabels[codec] : `${gpuCodecLabels[codec]} (${unavailable})`,
+      disabled: !encoderFor(codec) || isPlaylist,
+      group: vendor ? `Convert on GPU (${vendor})` : "Convert on GPU",
+    })),
+  ];
+
+  const choose = (choice: CodecChoice) => {
+    if (choice.startsWith("gpu:")) {
+      const codec = choice.slice(4) as HardwareCodec;
+      setOptions({
+        ...options,
+        codecPreference: undefined,
+        videoConversion: {
+          codec,
+          quality: conversion?.quality ?? 23,
+          useHardwareDecode: Boolean(conversion?.useHardwareDecode && encoderFor(codec)?.decodeAvailable),
+        },
+      });
+    } else {
+      setOptions({
+        ...options,
+        codecPreference: (choice || undefined) as CodecPreference | undefined,
+        videoConversion: undefined,
+      });
+    }
+  };
+
   return (
-    <div className="option-block">
-      <Toggle
-        label="GPU conversion"
-        description="Re-encode to MKV on the GPU after downloading. The original is removed only once the new file is complete."
-        checked={Boolean(conversion)}
-        onChange={(checked) =>
-          setOptions({
-            ...options,
-            videoConversion: checked
-              ? {
-                  codec: hardware.encoders.find((encoder) => encoder.available)?.codec ?? "h264",
-                  quality: 23,
-                  useHardwareDecode: false,
-                }
-              : undefined,
-          })
-        }
+    <>
+      <Select
+        id="video-codec"
+        value={conversion ? (`gpu:${conversion.codec}` as const) : (options.codecPreference ?? "")}
+        options={choices}
+        onChange={choose}
       />
       {conversion && (
         <div className="option-block__body">
-          <div className="field">
-            <label className="field__label" htmlFor="gpu-codec">
-              Video codec
-            </label>
-            <Select
-              id="gpu-codec"
-              value={conversion.codec}
-              onChange={(codec) => update({ codec })}
-              options={(["h264", "hevc", "av1"] as const).map((codec) => {
-                const encoder = encoderFor(codec);
-                const provider = encoder?.provider === "nvenc" ? "NVIDIA NVENC" : "AMD AMF";
-                return {
-                  value: codec,
-                  label: `${codecLabels[codec]} ${encoder ? `(${provider})` : "(not supported)"}`,
-                  disabled: !encoder,
-                };
-              })}
-            />
-          </div>
+          <span className="field__help">
+            Re-encodes to MKV after downloading. The original is removed only once the new file is complete.
+          </span>
           <label className="field">
             <span className="field__label">
               Quality <span className="mono">{conversion.quality}</span>
@@ -289,7 +317,7 @@ function GpuConversion({
           />
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -358,17 +386,6 @@ function AdvancedOptions({
       </button>
       {expanded && (
         <div className="advanced__body">
-          {options.mode !== "audio" && (
-            <FormRow label="Video codec" controlId="codec-preference">
-              <Select
-                id="codec-preference"
-                value={options.codecPreference ?? ""}
-                options={codecOptions}
-                onChange={(value) => set({ codecPreference: value || undefined })}
-              />
-            </FormRow>
-          )}
-
           {converting && (
             <FormRow label="Audio" controlId="keep-video">
               <Toggle
@@ -816,10 +833,6 @@ export function NewDownloadDialog() {
   const ytDlpReady = ready("yt_dlp");
   const ffmpegReady = ready("ffmpeg");
   const picking = options.mode === "custom";
-  const gpuReady =
-    !probe?.isPlaylist &&
-    hardwareAcceleration?.status === "available" &&
-    hardwareAcceleration.encoders.some((encoder) => encoder.available);
   const clipDisabledReason = probe?.isPlaylist
     ? "Clips work with one video at a time."
     : probe?.isLive
@@ -964,6 +977,7 @@ export function NewDownloadDialog() {
         customFormat,
         customArguments: [],
         noPlaylist: playlistLink && !wholePlaylist,
+        videoConversion: probe.isPlaylist ? undefined : options.videoConversion,
         clip: clipValidation?.kind === "valid" ? clipValidation.clip : undefined,
       },
     };
@@ -1168,6 +1182,17 @@ export function NewDownloadDialog() {
                   onChange={(value) => setOptions({ ...options, container: value || undefined })}
                 />
               </FormRow>
+
+              {!picking && (
+                <FormRow label="Video codec" controlId="video-codec">
+                  <VideoCodec
+                    hardware={hardwareAcceleration}
+                    options={options}
+                    setOptions={setOptions}
+                    isPlaylist={Boolean(probe?.isPlaylist)}
+                  />
+                </FormRow>
+              )}
             </>
           )}
 
@@ -1247,11 +1272,6 @@ export function NewDownloadDialog() {
             </FormRow>
           )}
 
-          {probe && gpuReady && hardwareAcceleration && options.mode === "video" && (
-            <FormRow label="GPU" controlId="gpu">
-              <GpuConversion hardware={hardwareAcceleration} options={options} setOptions={setOptions} />
-            </FormRow>
-          )}
         </div>
 
         <DestinationPicker destination={destination} onBrowse={() => void chooseDestination()} />

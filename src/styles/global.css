@@ -805,6 +805,18 @@ input[aria-invalid="true"] {
   flex: none;
 }
 
+.select__group {
+  padding: 6px 10px 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.select__group:not(:first-child) {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
 input[type="checkbox"],
 input[type="radio"],
 input[type="range"] {
