@@ -7,7 +7,9 @@ minimumReleaseAgeExclude:
   - postcss@8.5.26
   - js-yaml@4.3.1
   - nanoid@3.3.18
+  - source-map-js@1.2.2
 onlyBuiltDependencies:
   - esbuild
 overrides:
   nanoid@<3.3.18: 3.3.18
+  source-map-js@<1.2.2: 1.2.2
