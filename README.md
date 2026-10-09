@@ -1,4 +1,24 @@
+<div align="center">
+
+<img src="src-tauri/icons/app-icon.svg" width="72" height="72" alt="" />
+
 # yt-dlp Desktop
+
+[![version](https://img.shields.io/github/v/release/NitroDiesel/yt-dlp-desktop?label=version&color=1b4ed8)](https://github.com/NitroDiesel/yt-dlp-desktop/releases/latest)
+[![downloads](https://img.shields.io/github/downloads/NitroDiesel/yt-dlp-desktop/total)](https://github.com/NitroDiesel/yt-dlp-desktop/releases)
+[![issues](https://img.shields.io/github/issues/NitroDiesel/yt-dlp-desktop)](https://github.com/NitroDiesel/yt-dlp-desktop/issues)
+[![contributors](https://img.shields.io/github/contributors/NitroDiesel/yt-dlp-desktop?color=informational)](https://github.com/NitroDiesel/yt-dlp-desktop/graphs/contributors)
+[![platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555)](#install)
+[![license](https://img.shields.io/github/license/NitroDiesel/yt-dlp-desktop)](LICENSE)
+
+*Download video and audio with yt-dlp, without the command line.*
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/downloads-dark.webp">
+  <img src="docs/media/downloads-light.webp" alt="yt-dlp Desktop showing the downloads list with two videos downloading, one waiting, five completed, and one that needs attention" width="100%">
+</picture>
+
+</div>
 
 A focused desktop interface for [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Tauri 2, Rust, React, and SQLite.
 
@@ -7,6 +27,11 @@ The installer includes pinned, checksum-verified builds of **yt-dlp, FFmpeg, FFp
 > Download only media you are authorized to access. This project does not bypass DRM and is not affiliated with yt-dlp or supported media services.
 
 ## What it does
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/new-download-dark.webp">
+  <img src="docs/media/new-download-light.webp" alt="The New download dialog after reading a link, with Video or Audio only, Quality, Container, Video codec, Clip, and Save to rows above a collapsed Advanced section" width="100%">
+</picture>
 
 - Analyzes a video, playlist, or channel URL before downloading.
 - Offers clear video or audio, quality (best, or capped from 2160p down to 144p), container, audio format and bitrate, subtitle, metadata, and destination choices.
@@ -57,6 +82,8 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features
 ```
+
+The screenshots in `docs/media` come from the development-only visual preview (`?visual-preview&showcase`, synthetic data). To refresh them after a UI change, run `pnpm dev`, then `CHROME=<path to Chrome or chrome-headless-shell> node scripts/capture-readme-screenshots.mjs`.
 
 ## Design and implementation
 
