@@ -33,7 +33,7 @@ pub async fn probe(
         ));
     }
     let mut command = Command::new(executable);
-    command.arg("--ignore-config");
+    command.args(["--ignore-config", "--no-update"]);
     if let Some(deno) = deno {
         command
             .arg("--js-runtimes")

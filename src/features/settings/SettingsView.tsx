@@ -82,7 +82,9 @@ function ToolRow({ dependency }: { dependency: DependencyInfo }) {
             {ready
               ? dependency.source === "custom"
                 ? "Custom"
-                : "Bundled"
+                : dependency.source === "managed"
+                  ? "Updated"
+                  : "Bundled"
               : dependency.status === "missing"
                 ? "Missing"
                 : "Not working"}
@@ -139,12 +141,17 @@ export function SettingsView() {
   );
   const saveSettings = useAppStore((state) => state.saveSettings);
   const refreshEngineStatus = useAppStore((state) => state.refreshEngineStatus);
+  const updateEngine = useAppStore((state) => state.updateEngine);
   const ensureHardwareAcceleration = useAppStore(
     (state) => state.ensureHardwareAcceleration,
   );
   const [draft, setDraft] = useState<AppSettings | undefined>(settings);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [checking, setChecking] = useState(false);
+  const [engineUpdate, setEngineUpdate] = useState<{
+    state: "idle" | "updating" | "done" | "error";
+    message?: string;
+  }>({ state: "idle" });
 
   useEffect(() => setDraft(settings), [settings]);
   useEffect(() => ensureHardwareAcceleration(), [ensureHardwareAcceleration]);
@@ -197,6 +204,29 @@ export function SettingsView() {
       setSaveState("idle");
     } catch {
       setSaveState("error");
+    }
+  }
+
+  async function updateNow() {
+    const versionOf = () =>
+      useAppStore
+        .getState()
+        .dependencies.find((dependency) => dependency.kind === "yt_dlp")
+        ?.version?.match(/\d[\w.-]*/)?.[0];
+    const before = versionOf();
+    setEngineUpdate({ state: "updating" });
+    try {
+      await updateEngine();
+      const after = versionOf();
+      setEngineUpdate({
+        state: "done",
+        message:
+          after && after !== before
+            ? `Updated yt-dlp to ${after}.`
+            : `yt-dlp ${after ?? ""} is the latest version.`.replace("  ", " "),
+      });
+    } catch (error) {
+      setEngineUpdate({ state: "error", message: String(error) });
     }
   }
 
@@ -273,6 +303,10 @@ export function SettingsView() {
                   { value: "1440", label: "Up to 1440p" },
                   { value: "1080", label: "Up to 1080p" },
                   { value: "720", label: "Up to 720p" },
+                  { value: "480", label: "Up to 480p" },
+                  { value: "360", label: "Up to 360p" },
+                  { value: "240", label: "Up to 240p" },
+                  { value: "144", label: "Up to 144p" },
                   { value: "single", label: "Best single file" },
                 ]}
               />
@@ -530,7 +564,7 @@ export function SettingsView() {
 
         <Section
           title="Download engine"
-          description="Bundled, version-pinned tools. Nothing else needs to be installed."
+          description="Bundled tools, so nothing else needs to be installed. Sites change often, so yt-dlp keeps itself up to date."
           action={
             <button
               type="button"
@@ -545,6 +579,42 @@ export function SettingsView() {
           {dependencies.map((dependency) => (
             <ToolRow key={dependency.kind} dependency={dependency} />
           ))}
+          <div className="settings-row">
+            <Toggle
+              label="Keep yt-dlp up to date"
+              description="Checks at launch, at most once a day. Each update comes from the official yt-dlp release and is checked against its published checksums."
+              checked={draft.autoUpdateEngine}
+              onChange={(checked) => set("autoUpdateEngine", checked)}
+            />
+          </div>
+          <Row
+            title="Update yt-dlp now"
+            description={
+              settings.ytDlpPath ? (
+                "A custom yt-dlp is set under Custom tool overrides, so the app leaves it as it is."
+              ) : engineUpdate.message ? (
+                <span
+                  className={engineUpdate.state === "error" ? "field__error" : undefined}
+                  role={engineUpdate.state === "error" ? "alert" : "status"}
+                >
+                  {engineUpdate.message}
+                </span>
+              ) : (
+                "Gets the latest stable release now instead of waiting for the next launch."
+              )
+            }
+            control={
+              <button
+                type="button"
+                className="button button--outline button--compact"
+                disabled={engineUpdate.state === "updating" || Boolean(settings.ytDlpPath)}
+                onClick={() => void updateNow()}
+              >
+                <RefreshCw aria-hidden="true" />
+                {engineUpdate.state === "updating" ? "Updating…" : "Update now"}
+              </button>
+            }
+          />
           <details className="settings-row settings-disclosure">
             <summary>
               <span className="settings-row__text">

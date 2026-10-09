@@ -174,6 +174,8 @@ export interface AppSettings {
   defaultQuality: string;
   queueConcurrency: number;
   theme: "system" | "light" | "dark";
+  /** Keep the app's copy of yt-dlp current; checked at launch, at most daily. */
+  autoUpdateEngine: boolean;
   accent: AccentColor;
   reducedMotion: boolean;
   ytDlpPath?: string;

@@ -43,6 +43,10 @@ const qualityOptions = [
   { value: "1440", label: "Up to 1440p" },
   { value: "1080", label: "Up to 1080p" },
   { value: "720", label: "Up to 720p" },
+  { value: "480", label: "Up to 480p" },
+  { value: "360", label: "Up to 360p" },
+  { value: "240", label: "Up to 240p" },
+  { value: "144", label: "Up to 144p" },
   { value: "single", label: "Best single file, no merging" },
 ];
 

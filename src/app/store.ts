@@ -59,6 +59,7 @@ interface AppState {
   reorder: (jobId: string, direction: "up" | "down") => Promise<void>;
   setPaused: (paused: boolean) => Promise<void>;
   saveSettings: (settings: AppSettings) => Promise<void>;
+  updateEngine: () => Promise<void>;
   rememberDownloadDirectory: (directory: string) => Promise<void>;
   ensureHardwareAcceleration: () => void;
   refreshEngineStatus: () => Promise<void>;
@@ -136,11 +137,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (draftUrl === get().draftUrl) return;
     set({ draftUrl, probe: undefined, analyzeError: undefined });
   },
+  updateEngine: async () => {
+    set({ dependencies: await appApi.updateEngine() });
+  },
   initialize: async () => {
     try {
       const snapshot: AppSnapshot = await appApi.initialize();
       set({ ...snapshot, initialized: true, fatalError: undefined });
       await appApi.onJobChanged((job) => get().updateJob(job));
+      await appApi.onDependenciesChanged((dependencies) => set({ dependencies }));
     } catch (error) {
       set({ initialized: true, fatalError: String(error) });
     }

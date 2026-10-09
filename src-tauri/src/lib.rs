@@ -40,6 +40,7 @@ pub fn run() {
             commands::save_settings,
             commands::remember_download_directory,
             commands::refresh_dependencies,
+            commands::update_engine,
             commands::refresh_hardware_acceleration,
             commands::remove_history_entry,
             commands::open_job_output,

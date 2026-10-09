@@ -49,6 +49,7 @@ pub struct AppService {
     /// and started only when something needs the answer.
     hardware_cache: RwLock<Option<HardwareCache>>,
     hardware_probe: Mutex<()>,
+    engine_update: Mutex<()>,
 }
 
 struct HardwareCache {
@@ -120,7 +121,7 @@ impl AppService {
             .ok_or_else(|| AppError::Process("Cannot locate the bundled download engine".into()))?;
         Ok(Arc::new(Self {
             db,
-            dependencies: DependencyManager::new(bundled_dir),
+            dependencies: DependencyManager::new(bundled_dir, data_dir.join("engine")),
             settings: RwLock::new(settings),
             app,
             queue_paused: AtomicBool::new(false),
@@ -130,6 +131,7 @@ impl AppService {
             dependency_cache: RwLock::new(None),
             hardware_cache: RwLock::new(None),
             hardware_probe: Mutex::new(()),
+            engine_update: Mutex::new(()),
         }))
     }
 
@@ -185,7 +187,40 @@ impl AppService {
     }
 
     pub async fn start(self: &Arc<Self>) -> AppResult<()> {
+        let service = self.clone();
+        tauri::async_runtime::spawn(async move { service.update_engine_if_due().await });
         self.clone().schedule().await
+    }
+
+    /// Once a day at most, when enabled and no custom yt-dlp is set. Failures stay
+    /// quiet (offline, rate limits); the bundled or last updated copy keeps working.
+    async fn update_engine_if_due(&self) {
+        let settings = self.settings.read().await.clone();
+        if !settings.auto_update_engine
+            || settings.yt_dlp_path.is_some()
+            || !self.dependencies.engine_update_due()
+        {
+            return;
+        }
+        let _ = self.update_engine().await;
+    }
+
+    /// Updates the app's own copy of yt-dlp through yt-dlp's checksum-verified
+    /// updater, then re-checks every tool and tells the UI.
+    pub async fn update_engine(&self) -> AppResult<Vec<DependencyInfo>> {
+        let _updating = self.engine_update.lock().await;
+        let settings = self.settings.read().await.clone();
+        if settings.yt_dlp_path.is_some() {
+            return Err(AppError::Validation(
+                "A custom yt-dlp is set under Custom tool overrides. Clear it to use the app's updated copy".into(),
+            ));
+        }
+        self.dependencies
+            .update_yt_dlp(settings.proxy.as_deref())
+            .await?;
+        let dependencies = self.dependencies().await;
+        let _ = self.app.emit("dependencies-changed", &dependencies);
+        Ok(dependencies)
     }
 
     pub async fn probe_media(&self, url: String, no_playlist: bool) -> AppResult<MediaProbe> {

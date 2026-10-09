@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
   "ytDlp": {
-    "version": "2026.07.04",
+    "version": "2026.08.19",
     "license": "GPL-3.0-or-later (official PyInstaller/standalone combined work)",
-    "source": "https://github.com/yt-dlp/yt-dlp/releases/tag/2026.07.04",
+    "source": "https://github.com/yt-dlp/yt-dlp/releases/tag/2026.08.19",
     "targets": {
       "x86_64-pc-windows-msvc": {
         "asset": "yt-dlp.exe",
-        "sha256": "52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8"
+        "sha256": "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a"
       },
       "x86_64-unknown-linux-gnu": {
         "asset": "yt-dlp_linux",
-        "sha256": "6bbb3d314cde4febe36e5fa1d55462e29c974f63444e707871834f6d8cc210ae"
+        "sha256": "58162f9bfdc27458ea47bfcb311cf47028f17d8154a8bf7d689861d46399230a"
       },
       "aarch64-apple-darwin": {
         "asset": "yt-dlp_macos",
-        "sha256": "498bd0dae17855c599d371d68ec5bafc439a9d8640e838be25c765a9792f261b"
+        "sha256": "0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202"
       },
       "x86_64-apple-darwin": {
         "asset": "yt-dlp_macos",
-        "sha256": "498bd0dae17855c599d371d68ec5bafc439a9d8640e838be25c765a9792f261b"
+        "sha256": "0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202"
       }
     }
   },

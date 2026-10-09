@@ -9,7 +9,7 @@ The installer includes pinned, checksum-verified builds of **yt-dlp, FFmpeg, FFp
 ## What it does
 
 - Analyzes a video, playlist, or channel URL before downloading.
-- Offers clear video or audio, quality, container, audio format and bitrate, subtitle, metadata, and destination choices.
+- Offers clear video or audio, quality (best, or capped from 2160p down to 144p), container, audio format and bitrate, subtitle, metadata, and destination choices.
 - Exposes yt-dlp features as controls instead of command-line flags: exact stream picking, codec preference, subtitle conversion, chapters, SponsorBlock, side files, filename presets, parallel connections, and playlist date and item limits.
 - Remembers the last used download folder across app restarts and falls back when it is removed.
 - Shows every download in one list, filtered by Downloading, Completed, and Stopped, with details, progress, and errors in a side panel.
@@ -19,6 +19,8 @@ The installer includes pinned, checksum-verified builds of **yt-dlp, FFmpeg, FFp
 - Restores queued work after a restart and marks unexpectedly stopped work as interrupted.
 - Runs yt-dlp as a direct child process with typed arguments, bounded diagnostics, and process-tree cancellation.
 - Uses bundled tools by default and accepts only explicitly selected custom executables.
+- Keeps yt-dlp current, because sites change often: the app keeps its own copy of yt-dlp in its data folder and updates it through yt-dlp's own updater, which checks every download against the official release checksums. It checks at launch at most once a day, can be turned off, and can be run on demand in Settings. The pinned bundled build stays as the fallback.
+- Uses the yt-dlp project's own logo (public domain under the Unlicense) as its icon.
 - Downloads only a selected timeframe with either accurate boundaries or a faster keyframe cut.
 - Detects usable NVIDIA NVENC or AMD AMF encoders at runtime and can optionally re-encode a completed video on the GPU.
 - Runs bundled media tools silently in the background without opening console windows.

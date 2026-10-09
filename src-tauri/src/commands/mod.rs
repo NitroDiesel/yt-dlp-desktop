@@ -107,6 +107,10 @@ pub async fn refresh_dependencies(
     Ok(service.dependencies().await)
 }
 #[tauri::command]
+pub async fn update_engine(service: State<'_, Arc<AppService>>) -> AppResult<Vec<DependencyInfo>> {
+    service.update_engine().await
+}
+#[tauri::command]
 pub async fn refresh_hardware_acceleration(
     service: State<'_, Arc<AppService>>,
     force: Option<bool>,

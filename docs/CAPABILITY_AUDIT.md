@@ -1,6 +1,6 @@
 # yt-dlp capability audit
 
-Audited against the local upstream source tree at `D:\Coding2.0\yt-dlp-master`, version **2026.07.04**. The release component manifest pins the same version.
+Audited against the local upstream source tree at `D:\Coding2.0\yt-dlp-master`, version **2026.07.04**. The release component manifest now pins 2026.08.19, which has the same option set (all 361 long options compared). At runtime the app keeps its own copy of yt-dlp on the latest stable release.
 
 ## Release classification
 

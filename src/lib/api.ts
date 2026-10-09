@@ -31,6 +31,8 @@ export const appApi = {
     invoke<AppSettings>("remember_download_directory", { directory }),
   refreshDependencies: () =>
     invoke<AppSnapshot["dependencies"]>("refresh_dependencies"),
+  /** Updates the app's copy of yt-dlp, then returns every tool re-checked. */
+  updateEngine: () => invoke<AppSnapshot["dependencies"]>("update_engine"),
   /** Cached GPU capability; `force` re-runs the test encodes. */
   refreshHardwareAcceleration: (force: boolean) =>
     invoke<AppSnapshot["hardwareAcceleration"]>(
@@ -44,6 +46,13 @@ export const appApi = {
     invoke<void>("reveal_job_output", { jobId }),
   onJobChanged: (handler: (job: DownloadJob) => void): Promise<UnlistenFn> =>
     listen<DownloadJob>("download-job-changed", (event) =>
+      handler(event.payload),
+    ),
+  /** Fires after the daily background yt-dlp update. */
+  onDependenciesChanged: (
+    handler: (dependencies: AppSnapshot["dependencies"]) => void,
+  ): Promise<UnlistenFn> =>
+    listen<AppSnapshot["dependencies"]>("dependencies-changed", (event) =>
       handler(event.payload),
     ),
 };

@@ -572,6 +572,13 @@ pub struct AppSettings {
     /// Stamp files with the download time instead of the upload date.
     #[serde(default)]
     pub use_download_time: bool,
+    /// Keep the app's copy of yt-dlp current; checked at launch, at most daily.
+    #[serde(default = "default_true")]
+    pub auto_update_engine: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_accent() -> String {
@@ -614,6 +621,7 @@ impl Default for AppSettings {
             extractor_retries: None,
             legacy_server_connect: false,
             use_download_time: false,
+            auto_update_engine: true,
         }
     }
 }
@@ -782,6 +790,7 @@ mod tests {
         let settings: AppSettings = serde_json::from_value(value).unwrap();
         assert!(settings.last_download_directory.is_none());
         assert_eq!(settings.accent, "blue");
+        assert!(settings.auto_update_engine);
         assert!(settings.legacy_recent_download_directories.is_empty());
     }
 
