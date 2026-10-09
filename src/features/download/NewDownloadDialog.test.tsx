@@ -18,6 +18,7 @@ const settings: AppSettings = {
   queueConcurrency: 1,
   theme: "system",
   accent: "blue",
+  autoUpdateEngine: true,
   reducedMotion: false,
   retries: 10,
   fragmentRetries: 10,

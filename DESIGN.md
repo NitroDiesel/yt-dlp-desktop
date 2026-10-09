@@ -53,6 +53,6 @@ Dark is the default; light uses a matching zinc palette. Source: `src/styles/glo
 - Hairlines only separate structural regions: sidebar, table frame and rows, column header, inspector, dialog footer, settings rows, and the guide line beside Advanced options.
 - Status is always icon plus words, never color alone, and icons never spin.
 - Copy: no em or en dashes, at most one `·` per line, plain verbs, no marketing claims. Numbers shown are real values from yt-dlp, never decorative.
-- The sidebar shows the real app icon (`src/assets/app-icon.svg`, copied from `src-tauri/icons`), not a stand-in mark.
+- The app icon is the yt-dlp project's own logo (`>_dlp`, public domain under the Unlicense), rebuilt as a 1024px vector from the official artwork in `src-tauri/icons/app-icon.svg`; the sidebar shows the same file (`src/assets/app-icon.svg`), never a stand-in mark.
 - Desktop conventions: arrow cursor, no selection of interface text, and no browser context menu, reload, print, or find in release builds.
 - Motion is limited to one-off transitions under 200ms: hover/press, the switch knob, progress `transform`, the dialog opening, dropdown lists fading in with their chevron turning, the sidebar sliding, and a stepped skeleton pulse while analyzing. Nothing animates continuously. Reduce motion, in Settings or in the OS, turns all of it off.

@@ -488,14 +488,16 @@ fn format_selector(request: &DownloadRequest, settings: &AppSettings) -> AppResu
             "single" => Some("b".to_string()),
             "best" if !merging => Some("b".to_string()),
             "best" => audio.map(|audio| format!("bv*+{audio}/bv*+ba/b")),
-            value @ ("2160" | "1440" | "1080" | "720") => Some(if merging {
-                let preferred = audio
-                    .map(|audio| format!("bv*[height<={value}]+{audio}/"))
-                    .unwrap_or_default();
-                format!("{preferred}bv*[height<={value}]+ba/b[height<={value}] / wv*+ba/w")
-            } else {
-                format!("b[height<={value}] / b")
-            }),
+            value @ ("2160" | "1440" | "1080" | "720" | "480" | "360" | "240" | "144") => {
+                Some(if merging {
+                    let preferred = audio
+                        .map(|audio| format!("bv*[height<={value}]+{audio}/"))
+                        .unwrap_or_default();
+                    format!("{preferred}bv*[height<={value}]+ba/b[height<={value}] / wv*+ba/w")
+                } else {
+                    format!("b[height<={value}] / b")
+                })
+            }
             _ => {
                 return Err(AppError::Validation(
                     "Choose a supported video quality".into(),
@@ -531,7 +533,7 @@ pub fn build_download_args(
         "--no-overwrites"
     };
     let mut args: Vec<OsString> = vec![
-        "--ignore-config".into(), "--no-simulate".into(), "--newline".into(), "--color".into(), "never".into(),
+        "--ignore-config".into(), "--no-update".into(), "--no-simulate".into(), "--newline".into(), "--color".into(), "never".into(),
         "--progress-delta".into(), "0.25".into(), overwrite.into(), "--part".into(), "--continue".into(),
         "--progress-template".into(), format!(r#"download:{event}{{"v":1,"kind":"download","status":%(progress.status|null)j,"downloadedBytes":%(progress.downloaded_bytes|null)j,"totalBytes":%(progress.total_bytes|null)j,"totalBytesEstimate":%(progress.total_bytes_estimate|null)j,"speed":%(progress.speed|null)j,"eta":%(progress.eta|null)j,"filename":%(progress.filename|null)j,"playlistIndex":%(info.playlist_index|null)j,"playlistCount":%(info.playlist_count|null)j}}"#).into(),
         "--progress-template".into(), format!(r#"postprocess:{event}{{"v":1,"kind":"postprocess","status":%(progress.status|null)j,"postprocessor":%(progress.postprocessor|null)j,"filename":%(info.filepath|null)j}}"#).into(),
@@ -820,7 +822,26 @@ mod tests {
             args.iter()
                 .any(|arg| arg.to_string_lossy().contains("height<=1080"))
         );
+        // The app keeps yt-dlp current itself; the CLI's "older than 90 days" warning is noise here.
+        assert!(args.iter().any(|arg| arg == "--no-update"));
         assert_eq!(args.last().unwrap(), "https://example.com/watch?v=1");
+    }
+
+    #[test]
+    fn caps_low_resolution_presets_down_to_144p() {
+        for height in ["480", "360", "240", "144"] {
+            let mut value = request();
+            value.options.quality = height.into();
+            let args = build_download_args(&value, &AppSettings::default()).unwrap();
+            assert!(
+                args.iter()
+                    .any(|arg| arg.to_string_lossy().contains(&format!("height<={height}"))),
+                "{height}p is capped"
+            );
+        }
+        let mut value = request();
+        value.options.quality = "100".into();
+        assert!(build_download_args(&value, &AppSettings::default()).is_err());
     }
 
     #[test]

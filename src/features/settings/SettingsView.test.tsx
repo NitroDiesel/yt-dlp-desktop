@@ -17,6 +17,7 @@ const settings: AppSettings = {
   queueConcurrency: 1,
   theme: "system",
   accent: "blue",
+  autoUpdateEngine: true,
   reducedMotion: false,
   retries: 10,
   fragmentRetries: 10,
@@ -115,6 +116,41 @@ describe("SettingsView", () => {
     expect(saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({ theme: "dark" }),
     );
+  });
+
+  it("updates yt-dlp on request and reports the new version", async () => {
+    const user = userEvent.setup();
+    const updateEngine = vi.fn(async () => {
+      useAppStore.setState({
+        dependencies: [
+          { ...dependencies[0], source: "managed", version: "2026.08.19", message: undefined },
+          ...dependencies.slice(1),
+        ],
+      });
+    });
+    useAppStore.setState({ updateEngine });
+    render(<SettingsView />);
+
+    await user.click(screen.getByRole("button", { name: "Update now" }));
+
+    expect(updateEngine).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent("Updated yt-dlp to 2026.08.19.");
+    expect(screen.getByText("Updated")).toBeVisible();
+  });
+
+  it("explains a failed yt-dlp update and keeps the automatic setting editable", async () => {
+    const user = userEvent.setup();
+    const saveSettings = vi.fn().mockResolvedValue(undefined);
+    const updateEngine = vi.fn().mockRejectedValue("yt-dlp could not update: no internet");
+    useAppStore.setState({ saveSettings, updateEngine });
+    render(<SettingsView />);
+
+    await user.click(screen.getByRole("button", { name: "Update now" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("no internet");
+
+    await user.click(screen.getByRole("switch", { name: "Keep yt-dlp up to date" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ autoUpdateEngine: false }));
   });
 
   it("saves the accent color picked from the swatches", async () => {

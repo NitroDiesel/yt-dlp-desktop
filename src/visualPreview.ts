@@ -47,6 +47,7 @@ const snapshot: AppSnapshot = {
     queueConcurrency: 2,
     theme: "dark",
     accent: "blue",
+    autoUpdateEngine: true,
     reducedMotion: false,
     retries: 10,
     fragmentRetries: 10,
@@ -142,6 +143,7 @@ export async function installVisualPreview() {
         case "probe_media":
           return probe;
         case "refresh_dependencies":
+        case "update_engine":
           return snapshot.dependencies;
         case "refresh_hardware_acceleration":
           return snapshot.hardwareAcceleration;

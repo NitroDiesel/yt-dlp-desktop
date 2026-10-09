@@ -19,7 +19,7 @@ yt-dlp Desktop is a focused desktop download manager, not a browser and not a ch
 
 Keep the primary flow lightweight and obvious: analyze a link, choose video/audio/exact format, choose a destination, then download or queue. Put expert controls behind progressive disclosure. Remove decorative status chrome when it does not communicate state or provide an action.
 
-A fresh installation must be ready to use. yt-dlp, Deno, FFmpeg, and FFprobe ship as pinned, checksum-verified sidecars. NVIDIA NVENC and AMD AMF are runtime capabilities detected from FFmpeg, the installed GPU, and the installed driver; vendor drivers and SDKs are not bundled.
+A fresh installation must be ready to use. yt-dlp, Deno, FFmpeg, and FFprobe ship as pinned, checksum-verified sidecars. After installation, the app keeps its own copy of yt-dlp updated through yt-dlp's checksum-verified updater (see `docs/ARCHITECTURE.md`); the other tools change only with app releases. NVIDIA NVENC and AMD AMF are runtime capabilities detected from FFmpeg, the installed GPU, and the installed driver; vendor drivers and SDKs are not bundled.
 
 ## Engineering boundaries
 

@@ -66,6 +66,7 @@ Schema changes must be additive migrations. Released migrations are immutable. A
 - Diagnostics are bounded and redact URLs, query strings, authorization/cookie-like values, and local user-directory prefixes.
 - The content security policy allows only bundled UI resources and Tauri IPC.
 - Bundled sidecars are pinned to exact versions and verified before packaging.
+- yt-dlp is the one tool that updates after installation, because sites break old releases quickly and yt-dlp itself warns once a build is 90 days old. The app keeps a copy in `<app data>/engine/`, which is writable even where the bundled copy is not (Linux packages, macOS app bundles). It seeds that copy from the bundled build, or replaces it whenever the bundled build is newer, then runs `yt-dlp --update` on it. yt-dlp's own updater fetches the latest stable release from github.com/yt-dlp/yt-dlp and refuses a binary whose SHA-256 does not match the release's `SHA2-256SUMS`. Lookup order is: custom path, then the updated copy, then the bundled build. Automatic updates run in the background at launch, at most every 20 hours (`engine/last-update-check`), and never touch a custom yt-dlp. Every yt-dlp run passes `--no-update`, so the command-line "older than 90 days" warning does not reach the UI.
 - Deno is passed explicitly to yt-dlp as the JavaScript runtime; it is not exposed as a general-purpose UI command.
 
 ## Bundled-tools decision
