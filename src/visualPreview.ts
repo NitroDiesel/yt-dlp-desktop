@@ -1,7 +1,14 @@
 import { mockIPC } from "@tauri-apps/api/mocks";
 import type { AppSnapshot, DownloadJob, MediaProbe } from "./types/contracts";
 
-function previewJob(title: string, status: DownloadJob["status"], index: number): DownloadJob {
+function previewJob(
+  title: string,
+  status: DownloadJob["status"],
+  index: number,
+  options: Partial<DownloadJob["request"]["options"]> = {},
+  percent = 42,
+): DownloadJob {
+  const extension = options.mode === "video" ? (options.container ?? "mp4") : (options.audioFormat ?? "mp3");
   return {
     id: `preview-${index}`,
     title,
@@ -15,14 +22,15 @@ function previewJob(title: string, status: DownloadJob["status"], index: number)
         mode: "audio", quality: "best", audioFormat: "mp3", audioQuality: "320K",
         subtitleLanguages: [], writeSubtitles: false, writeAutomaticSubtitles: false,
         embedSubtitles: false, embedMetadata: true, embedThumbnail: false, customArguments: [],
+        ...options,
       },
     },
     progress: status === "downloading"
-      ? { percent: 42, speedBytesPerSecond: 2400000, etaSeconds: 18 }
+      ? { percent, speedBytesPerSecond: 6800000, etaSeconds: 41, totalBytes: 1_480_000_000 }
       : { percent: status === "completed" ? 100 : undefined },
     createdAt: "2026-09-05T10:00:00Z",
     finishedAt: status === "completed" ? "2026-09-05T10:01:00Z" : undefined,
-    outputPath: status === "completed" ? `D:\\Downloads\\Sound library\\${title}.mp3` : undefined,
+    outputPath: status === "completed" ? `D:\\Downloads\\Sound library\\${title}.${extension}` : undefined,
     errorMessage: status === "failed" ? "The connection was interrupted. Retry to continue downloading." : undefined,
     diagnostics: ["Synthetic visual preview. No media was downloaded."],
   };
@@ -36,6 +44,27 @@ const previewJobs = [
   previewJob("Sound effects collection with a long descriptive filename for layout testing", "completed", 5),
   previewJob("Rewind - Sound Effect", "completed", 6),
 ];
+
+/** README screenshots: a realistic mix of video and audio in every state. */
+function showcaseJobs(): DownloadJob[] {
+  const video = (quality: string, container?: "mp4" | "mkv") => ({ mode: "video" as const, quality, container });
+  const audio = (audioFormat: "mp3" | "flac" | "opus", audioQuality: "320K" | "best" = "best") => ({
+    mode: "audio" as const,
+    audioFormat,
+    audioQuality,
+  });
+  return [
+    previewJob("Northern lights timelapse over the fjords", "downloading", 1, video("2160", "mp4"), 64),
+    previewJob("How suspension bridges survive earthquakes", "downloading", 2, video("1440", "mkv"), 23),
+    previewJob("Building a mechanical keyboard from scratch", "queued", 3, video("1080", "mp4")),
+    previewJob("Three hour rain and thunder ambience", "completed", 4, audio("flac")),
+    previewJob("Morning city walk through old town, 4K", "completed", 5, video("2160", "mkv")),
+    previewJob("Developer conference keynote, full session", "failed", 6, video("1080", "mp4")),
+    previewJob("Lo-fi study mix, volume 12", "completed", 7, audio("mp3", "320K")),
+    previewJob("Pottery wheel basics for beginners", "completed", 8, video("720", "mp4")),
+    previewJob("Podcast episode 214: the history of maps", "completed", 9, audio("opus")),
+  ];
+}
 
 const snapshot: AppSnapshot = {
   settings: {
@@ -133,6 +162,14 @@ export async function installVisualPreview() {
       ? [previewJob("Rain on a tin roof", "downloading", 7), previewJob("Forest ambience", "queued", 8), failed, ...previewJobs]
       : previewJobs;
     snapshot.history = params.has("mixed") ? [failed, ...previewJobs] : previewJobs;
+  }
+  if (params.has("showcase")) {
+    const jobs = showcaseJobs();
+    jobs[1].progress = { percent: 23, speedBytesPerSecond: 3_100_000, etaSeconds: 236, totalBytes: 912_000_000 };
+    snapshot.queue = jobs.filter((job) => job.status !== "completed" && job.status !== "failed");
+    snapshot.history = jobs.filter((job) => job.status === "completed" || job.status === "failed");
+    probe.title = "Northern lights timelapse over the fjords";
+    probe.creator = "Night Sky Studio";
   }
   if (params.get("theme") === "light") snapshot.settings.theme = "light";
   mockIPC(
