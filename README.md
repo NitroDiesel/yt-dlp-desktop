@@ -84,7 +84,7 @@ Everything needed for downloading is included. Custom tool paths in **Settings â
 Prerequisites for contributors:
 
 - Rust stable
-- Node.js 22 or newer and pnpm 11
+- Node.js 22.13 or newer and pnpm 11
 - The [Tauri 2 platform prerequisites](https://v2.tauri.app/start/prerequisites/)
 
 ```powershell
