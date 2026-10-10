@@ -24,20 +24,6 @@ yt-dlp Desktop is a download manager built on [yt-dlp](https://github.com/yt-dlp
 
 > Download only media you are authorized to access. This project does not bypass DRM and is not affiliated with yt-dlp or supported media services.
 
-## Why not just use yt-dlp?
-
-yt-dlp is excellent, but it is a terminal program with hundreds of flags. yt-dlp Desktop keeps its power and removes the typing.
-
-| | yt-dlp on the command line | yt-dlp Desktop |
-| --- | --- | --- |
-| Setup | Install yt-dlp, FFmpeg, and a JavaScript runtime yourself and keep them on your PATH | One installer that includes all of them, checksum-verified |
-| Picking quality | Run `-F`, read the format table, type `-f 137+140` | Pick from the formats the link offers, or just choose 1080p |
-| Options | Remember flags like `--download-sections` or `--sponsorblock-remove` | Switches and lists, with expert options under Advanced |
-| Many downloads | Batch files and shell loops | A queue with pause, reorder, retry, and up to 4 at once, kept across restarts |
-| Progress and errors | Scrolling terminal text | Progress, speed, and time left per download, with plain-language errors and the full log one click away |
-| Staying current | Remember to run `yt-dlp -U` | Updates its own copy of yt-dlp at launch |
-| GPU re-encoding | Write your own FFmpeg command | Choose an NVENC or AMF codec in the Video codec list |
-
 ## How it differs from other yt-dlp apps
 
 There are good yt-dlp front-ends already, such as [Parabolic](https://github.com/NickvisionApps/Parabolic) and [Open Video Downloader](https://github.com/jely2002/youtube-dl-gui). yt-dlp Desktop puts its effort into these:
