@@ -153,7 +153,12 @@ export function SettingsView() {
     message?: string;
   }>({ state: "idle" });
 
-  useEffect(() => setDraft(settings), [settings]);
+  // Saved settings replace the draft, so it never shows stale values.
+  const [savedSettings, setSavedSettings] = useState(settings);
+  if (settings !== savedSettings) {
+    setSavedSettings(settings);
+    setDraft(settings);
+  }
   useEffect(() => ensureHardwareAcceleration(), [ensureHardwareAcceleration]);
   if (!draft || !settings) return null;
   const current = draft;

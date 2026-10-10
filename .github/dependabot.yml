@@ -4,9 +4,19 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # typescript-eslint supports TypeScript only up to 6.0 so far.
+      - dependency-name: typescript
+        versions: [">=6.1"]
+      # Node types follow the Node.js line that CI and contributors use (22).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
+      # Major versions arrive as their own pull requests, so one breaking
+      # release can't hold back the routine updates.
       frontend:
         patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
@@ -14,6 +24,7 @@ updates:
     groups:
       rust:
         patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:

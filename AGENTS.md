@@ -29,6 +29,7 @@ A fresh installation must be ready to use. yt-dlp, Deno, FFmpeg, and FFprobe shi
 - Treat SQLite migrations as append-only after release. Add a migration instead of editing a released migration.
 - Keep open, reveal, and delete-file actions tied to a validated completed job. The frontend must not send arbitrary filesystem paths to platform commands.
 - Keep bundled dependency versions and checksums in `packaging/components.json`; never commit downloaded sidecar binaries.
+- Update Tauri on both sides together: the `tauri` crate with `@tauri-apps/api` and `@tauri-apps/cli`, and each `tauri-plugin-*` crate with its `@tauri-apps/plugin-*` package, each pair on the same minor version. Dependabot proposes the two sides in separate pull requests.
 
 ## Completion criteria
 
