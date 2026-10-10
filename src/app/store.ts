@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { appApi } from "../lib/api";
-import { filterFor, isVideoInPlaylist, type DownloadFilter } from "../lib/jobs";
+import {
+  filterFor,
+  findJob,
+  hasDeletableFile,
+  isVideoInPlaylist,
+  type DownloadFilter,
+} from "../lib/jobs";
 import type {
   AppSettings,
   AppSnapshot,
@@ -19,6 +25,8 @@ interface AppState {
   filter: DownloadFilter;
   inspector: Inspector;
   newDownloadOpen: boolean;
+  /** Download waiting in the Remove dialog for the keep-or-delete-file choice. */
+  removing?: string;
   /** Hidden sidebar; remembered on this device across launches. */
   sidebarCollapsed: boolean;
   /** Link in the New download dialog; also filled by paste-anywhere. */
@@ -54,7 +62,10 @@ interface AppState {
   updateJob: (job: DownloadJob) => void;
   cancel: (jobId: string) => Promise<void>;
   retry: (jobId: string) => Promise<void>;
-  removeJob: (jobId: string) => Promise<void>;
+  /** Removes at once, or asks first when there is a file that could be deleted too. */
+  requestRemove: (jobId: string) => void;
+  cancelRemove: () => void;
+  removeJob: (jobId: string, deleteFile?: boolean) => Promise<void>;
   clearCompleted: () => Promise<void>;
   reorder: (jobId: string, direction: "up" | "down") => Promise<void>;
   setPaused: (paused: boolean) => Promise<void>;
@@ -209,8 +220,16 @@ export const useAppStore = create<AppState>((set, get) => ({
           : state.inspector,
     }));
   },
-  removeJob: async (jobId) => {
+  requestRemove: (jobId) => {
     const { queue, history } = get();
+    const job = findJob(queue, history, jobId);
+    if (job && hasDeletableFile(job)) set({ removing: jobId });
+    else void get().removeJob(jobId);
+  },
+  cancelRemove: () => set({ removing: undefined }),
+  removeJob: async (jobId, deleteFile = false) => {
+    const { queue, history } = get();
+    if (deleteFile) await appApi.trashJobOutput(jobId);
     await Promise.all([
       queue.some((job) => job.id === jobId) && appApi.removeQueueJob(jobId),
       history.some((job) => job.id === jobId) && appApi.removeHistory(jobId),
@@ -218,6 +237,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       queue: state.queue.filter((job) => job.id !== jobId),
       history: state.history.filter((job) => job.id !== jobId),
+      removing: state.removing === jobId ? undefined : state.removing,
       inspector:
         state.inspector?.kind === "job" && state.inspector.id === jobId
           ? null

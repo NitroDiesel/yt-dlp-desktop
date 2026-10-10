@@ -89,7 +89,7 @@ describe("JobRow", () => {
     expect(screen.getByText("42%")).toBeVisible();
     expect(screen.getByText("2.4 MB/s")).toBeVisible();
     expect(screen.getByText("0:18")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Remove from list" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalledWith("completed-job");
@@ -105,7 +105,7 @@ describe("JobRow", () => {
 
     expect(screen.getByText("Needs attention")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Retry" }));
-    await user.click(screen.getByRole("button", { name: "Remove from list" }));
+    await user.click(screen.getByRole("button", { name: "Remove" }));
     expect(onRetry).toHaveBeenCalledWith("completed-job");
     expect(onRemove).toHaveBeenCalledWith("completed-job");
   });

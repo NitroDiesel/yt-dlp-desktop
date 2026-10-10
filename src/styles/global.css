@@ -1417,6 +1417,41 @@ input[type="range"] {
   margin-top: 1px;
 }
 
+/* ---------- Confirmation dialog ---------- */
+
+.confirm-dialog {
+  width: min(440px, calc(100vw - 48px));
+}
+
+.confirm-dialog p {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.confirm-dialog__option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.confirm-dialog__option input {
+  flex: none;
+  margin: 2px 0 0;
+}
+
+.confirm-dialog__option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.confirm-dialog__option small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 .form-rows,
 .advanced__body {
   display: flex;

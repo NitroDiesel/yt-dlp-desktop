@@ -37,7 +37,7 @@ export const JobRow = memo(function JobRow({
   onSelect: (jobId: string) => void;
   onCancel: (jobId: string) => Promise<void>;
   onRetry: (jobId: string) => Promise<void>;
-  onRemove: (jobId: string) => Promise<void>;
+  onRemove: (jobId: string) => void;
 }) {
   const title = jobTitle(job);
   const running = isRunning(job.status);
@@ -157,9 +157,9 @@ export const JobRow = memo(function JobRow({
           <button
             type="button"
             className="icon-button"
-            aria-label="Remove from list"
-            title="Remove from list"
-            onClick={() => void onRemove(job.id)}
+            aria-label="Remove"
+            title="Remove"
+            onClick={() => onRemove(job.id)}
           >
             <Trash2 />
           </button>
