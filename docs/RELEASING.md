@@ -4,6 +4,8 @@
 
 Stable releases are built only from a signed `vMAJOR.MINOR.PATCH` tag after the native CI and package-smoke workflows pass. The tag, `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` must contain the same version. Do not publish a package built from a dirty tree.
 
+Releases are numbered from 1.0.0 (v0.1.0 to v0.1.14 came before and stay as published). Raise PATCH for fixes and MINOR for new features.
+
 Official packages include the exact yt-dlp, Deno, FFmpeg, and FFprobe builds in `packaging/components.json`. Updating any component requires reviewing its release notes and license notices, independently calculating every asset hash, preserving a durable corresponding-source path, running the fake-process integration suite, and completing installation/download/cancellation smoke tests on each platform.
 
 ## Local verification
@@ -41,7 +43,7 @@ Configure these as GitHub environment secrets; never put them in repository vari
 - Apple: `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, and App Store Connect issuer/key credentials for notarization.
 - Windows: an organization code-signing certificate/provider credential accepted by the selected signing service. Keep the service-specific command in the protected release environment.
 
-Version 0.1 intentionally does not advertise an automatic updater until the public repository URL, signing public key, and immutable release endpoint exist. Add the Tauri updater plugin only after key custody, key rotation, rollback, and compromised-release procedures are documented and tested.
+The app intentionally does not include Tauri's automatic updater until the public repository URL, signing public key, and immutable release endpoint exist. Add the Tauri updater plugin only after key custody, key rotation, rollback, and compromised-release procedures are documented and tested.
 
 ## Manual smoke checklist
 
