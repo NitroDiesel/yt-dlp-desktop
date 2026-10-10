@@ -43,6 +43,7 @@ pub fn run() {
             commands::update_engine,
             commands::refresh_hardware_acceleration,
             commands::remove_history_entry,
+            commands::trash_job_output,
             commands::open_job_output,
             commands::reveal_job_output,
         ])

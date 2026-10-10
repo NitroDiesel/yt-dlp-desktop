@@ -4,17 +4,19 @@ import { AlertTriangle } from "lucide-react";
 import { AppShell } from "../components/AppShell";
 import { NewDownloadDialog } from "../features/download/NewDownloadDialog";
 import { JobDetails } from "../features/queue/JobDetails";
+import { RemoveDownloadDialog } from "../features/queue/RemoveDownloadDialog";
 import { QueueView } from "../features/queue/QueueView";
 import { SettingsView } from "../features/settings/SettingsView";
 import { useAppStore } from "./store";
 
 export default function App() {
-  const { page, inspector, newDownloadOpen, initialized, fatalError, theme, accent, reducedMotion } =
+  const { page, inspector, newDownloadOpen, removing, initialized, fatalError, theme, accent, reducedMotion } =
     useAppStore(
       useShallow((state) => ({
         page: state.page,
         inspector: state.inspector,
         newDownloadOpen: state.newDownloadOpen,
+        removing: state.removing,
         initialized: state.initialized,
         fatalError: state.fatalError,
         theme: state.settings?.theme,
@@ -69,6 +71,7 @@ export default function App() {
     <AppShell inspector={panel}>
       {page === "settings" ? <SettingsView /> : <QueueView />}
       {newDownloadOpen && <NewDownloadDialog />}
+      {removing && <RemoveDownloadDialog key={removing} jobId={removing} />}
     </AppShell>
   );
 }

@@ -27,7 +27,7 @@ A fresh installation must be ready to use. yt-dlp, Deno, FFmpeg, and FFprobe shi
 - Every frontend contract change must be mirrored at the Rust serde boundary and remain compatible with persisted jobs where practical.
 - Build child-process arguments as typed argv elements. Keep shell execution, arbitrary executable discovery, and unmanaged output redirection outside the download path.
 - Treat SQLite migrations as append-only after release. Add a migration instead of editing a released migration.
-- Keep open/reveal actions tied to a validated completed job. The frontend must not send arbitrary filesystem paths to platform commands.
+- Keep open, reveal, and delete-file actions tied to a validated completed job. The frontend must not send arbitrary filesystem paths to platform commands.
 - Keep bundled dependency versions and checksums in `packaging/components.json`; never commit downloaded sidecar binaries.
 
 ## Completion criteria

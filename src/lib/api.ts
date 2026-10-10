@@ -41,6 +41,8 @@ export const appApi = {
     ),
   removeHistory: (jobId: string) =>
     invoke<void>("remove_history_entry", { jobId }),
+  trashJobOutput: (jobId: string) =>
+    invoke<void>("trash_job_output", { jobId }),
   openJobOutput: (jobId: string) => invoke<void>("open_job_output", { jobId }),
   revealJobOutput: (jobId: string) =>
     invoke<void>("reveal_job_output", { jobId }),

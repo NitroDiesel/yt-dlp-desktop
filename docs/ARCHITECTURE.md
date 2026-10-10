@@ -28,7 +28,7 @@ Application service ───── Queue scheduler
 - `integration/ffmpeg`: runtime NVENC/AMF capability probes and the cancellation-safe, non-destructive GPU conversion stage.
 - `integration/dependencies`: bundled and explicitly selected custom executable discovery and version checks.
 - `persistence`: migrations and SQLite queries. Migration `0001_initial.sql` is applied from the first release.
-- `platform`: the narrow open/reveal adapter. It receives a persisted completed job ID, not an arbitrary path from the UI.
+- `platform`: the narrow open, reveal, and move-to-trash adapter. It receives a persisted completed job ID, not an arbitrary path from the UI.
 - `commands`: the only Tauri command surface exposed to the frontend.
 
 ## Process lifecycle
@@ -40,11 +40,11 @@ Application service ───── Queue scheduler
 5. yt-dlp emits a machine-readable sentinel protocol. stdout/stderr are consumed concurrently to prevent pipe deadlocks. Structured progress is emitted to the UI at most four times a second and persisted at most every two seconds; status changes and reported output files are written and emitted immediately.
 6. Cancellation first targets the whole process group/tree gracefully, then force-terminates it after a bounded wait.
 7. Optional GPU conversion re-checks the driver, automatically selects a working NVENC or AMF encoder for the requested codec, and writes a unique temporary MKV beside the source. The source is removed only after the GPU output is finalized; failures and cancellation preserve it.
-8. Output paths are accepted only from successful child-process output, persisted, and used for open/reveal actions.
+8. Output paths are accepted only from successful child-process output, persisted, and used for open, reveal, and delete actions.
 
 ## Persistence and recovery
 
-The database lives in the per-user Tauri application-data directory. Jobs, settings, dependency metadata, and the bounded diagnostic tail are transactional. At startup, work left in an active state is marked `interrupted`; queued work is scheduled again. Completed and failed records remain in history until the user removes them. The UI shows the queue and history as one downloads list; "Clear list" in the Completed view removes completed records from both, never the files.
+The database lives in the per-user Tauri application-data directory. Jobs, settings, dependency metadata, and the bounded diagnostic tail are transactional. At startup, work left in an active state is marked `interrupted`; queued work is scheduled again. Completed and failed records remain in history until the user removes them. The UI shows the queue and history as one downloads list; "Clear list" in the Completed view removes completed records from both, never the files. Removing one completed single download asks whether to keep its file or delete it too; deleting re-validates the recorded path inside the job's destination and moves the file to the Recycle Bin or Trash (the `trash` crate), never a permanent delete. A playlist records only one of its files, so its files are never deleted this way.
 
 Settings are one JSON document; fields added after a release carry serde defaults, so older saved settings still load (for example, a missing accent color reads as Blue). The one exception to SQLite is whether the sidebar is hidden: it is a window-layout preference, kept in the webview's local storage and never sent to Rust.
 

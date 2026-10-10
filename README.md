@@ -20,41 +20,64 @@
 
 </div>
 
-A focused desktop interface for [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Tauri 2, Rust, React, and SQLite.
-
-The installer includes pinned, checksum-verified builds of **yt-dlp, FFmpeg, FFprobe, and Deno**. People who install the app do not need Python, Node.js, a terminal, or any separate media tools.
+yt-dlp Desktop is a download manager built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), the command-line tool behind most video downloaders. Paste a link, choose from the formats the site actually offers, and the file lands in your folder. It works with YouTube, TikTok, Instagram, X, Reddit, Twitch, Vimeo, SoundCloud, Bilibili, and the [other sites yt-dlp supports](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md), over a thousand of them.
 
 > Download only media you are authorized to access. This project does not bypass DRM and is not affiliated with yt-dlp or supported media services.
 
-## What it does
+## Why not just use yt-dlp?
+
+yt-dlp is excellent, but it is a terminal program with hundreds of flags. yt-dlp Desktop keeps its power and removes the typing.
+
+| | yt-dlp on the command line | yt-dlp Desktop |
+| --- | --- | --- |
+| Setup | Install yt-dlp, FFmpeg, and a JavaScript runtime yourself and keep them on your PATH | One installer that includes all of them, checksum-verified |
+| Picking quality | Run `-F`, read the format table, type `-f 137+140` | Pick from the formats the link offers, or just choose 1080p |
+| Options | Remember flags like `--download-sections` or `--sponsorblock-remove` | Switches and lists, with expert options under Advanced |
+| Many downloads | Batch files and shell loops | A queue with pause, reorder, retry, and up to 4 at once, kept across restarts |
+| Progress and errors | Scrolling terminal text | Progress, speed, and time left per download, with plain-language errors and the full log one click away |
+| Staying current | Remember to run `yt-dlp -U` | Updates its own copy of yt-dlp at launch |
+| GPU re-encoding | Write your own FFmpeg command | Choose an NVENC or AMF codec in the Video codec list |
+
+## How it differs from other yt-dlp apps
+
+There are good yt-dlp front-ends already, such as [Parabolic](https://github.com/NickvisionApps/Parabolic) and [Open Video Downloader](https://github.com/jely2002/youtube-dl-gui). yt-dlp Desktop puts its effort into these:
+
+- **Ready on first launch.** It ships Deno, the JavaScript runtime yt-dlp now needs for YouTube, together with FFmpeg and FFprobe, so merging, audio conversion, and YouTube work without any extra setup.
+- **All of yt-dlp as controls, with no argument box.** Clips by time range, SponsorBlock, chapters, subtitle conversion, playlist date windows and item ranges, dubbed audio tracks, browser impersonation, region bypass, and cookies from your browser are all buttons, switches, and lists.
+- **A real download manager.** One list of every download, laid out like Motrix, with a details panel, paste-a-link-anywhere, and a queue that survives a restart. Downloads stopped by a crash or shutdown are marked so you can resume them.
+- **GPU conversion that is tested, not guessed.** NVENC and AMF codecs appear only after a real test encode succeeds on your GPU and driver.
+- **yt-dlp that stays current safely.** The app updates its own copy of yt-dlp through yt-dlp's updater, which checks each download against the official release checksums. The bundled build stays as a fallback.
+- **Careful with your computer.** yt-dlp runs as a direct process with typed arguments and never through a shell. The app only opens or deletes files it downloaded into the folder you chose, and deleted files go to the Recycle Bin or Trash. It sends no telemetry, and cookie files are read in place, never copied.
+- **Free and open source,** under the GPL, with no account, ads, or subscription. Every release publishes checksums and GitHub build provenance, so you can check that an installer came from this repository.
+
+## Features
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/new-download-dark.webp">
   <img src="docs/media/new-download-light.webp" alt="The New download dialog after reading a link, with Video or Audio only, Quality, Container, Video codec, Clip, and Save to rows above a collapsed Advanced section" width="100%">
 </picture>
 
-- Analyzes a video, playlist, or channel URL before downloading.
-- Offers clear video or audio, quality (best, or capped from 2160p down to 144p), container, audio format and bitrate, subtitle, metadata, and destination choices.
-- Exposes yt-dlp features as controls instead of command-line flags: exact stream picking, codec preference, subtitle conversion, chapters, SponsorBlock, side files, filename presets, parallel connections, and playlist date and item limits.
-- Remembers the last used download folder across app restarts and falls back when it is removed.
-- Shows every download in one list, filtered by Downloading, Completed, and Stopped, with details, progress, and errors in a side panel.
-- Starts a new download when a link is pasted anywhere in the window.
-- Persists the queue, history, settings, progress, errors, and diagnostics in SQLite.
-- Supports pause, reorder, retry, cancel, reveal, and open actions.
-- Restores queued work after a restart and marks unexpectedly stopped work as interrupted.
-- Runs yt-dlp as a direct child process with typed arguments, bounded diagnostics, and process-tree cancellation.
-- Uses bundled tools by default and accepts only explicitly selected custom executables.
-- Keeps yt-dlp current, because sites change often: the app keeps its own copy of yt-dlp in its data folder and updates it through yt-dlp's own updater, which checks every download against the official release checksums. It checks at launch at most once a day, can be turned off, and can be run on demand in Settings. The pinned bundled build stays as the fallback.
-- Uses the yt-dlp project's own logo (public domain under the Unlicense) as its icon.
-- Downloads only a selected timeframe with either accurate boundaries or a faster keyframe cut.
-- Detects usable NVIDIA NVENC or AMD AMF encoders at runtime and can optionally re-encode a completed video on the GPU.
-- Runs bundled media tools silently in the background without opening console windows.
+- Reads a video, playlist, or channel link before downloading and shows its title, length, and formats.
+- Video or audio only, quality from best down to 144p, MP4, MKV, or WebM, and MP3, M4A, Opus, FLAC, or WAV at a chosen bitrate.
+- Exact stream picking, codec preference, subtitles in any offered language, embedded metadata, thumbnails, and chapters.
+- Downloads only part of a video, with exact cuts or a faster keyframe cut.
+- Downloads list filtered by Downloading, Completed, and Stopped, with pause, reorder, retry, cancel, open, and show in folder.
+- Remove a download from the list and choose whether to keep its file or move it to the Recycle Bin or Trash.
+- Remembers your last folder, accent color, theme, and sidebar layout.
+- Optional re-encode to H.264, HEVC, or AV1 on an NVIDIA or AMD GPU.
 
 ## Install
 
-Download the package for your platform from GitHub Releases and install it normally. The first launch is ready for analyzing, downloading, merging, audio conversion, and subtitle post-processing. Custom executable overrides in **Settings → Download engine** are optional expert controls. Release checksums and GitHub build-provenance attestations are published alongside each package.
+Download the package for your system from the [latest release](https://github.com/NitroDiesel/yt-dlp-desktop/releases/latest) and install it normally.
 
-The initial release targets Windows 10 22H2/11 x64, macOS 12+ (Intel and Apple silicon), and x64 Linux distributions with glibc 2.28/kernel 4.18 or newer. GPU conversion appears only when the bundled FFmpeg engine completes a real runtime encode through an installed NVIDIA or AMD driver; no vendor driver/runtime is bundled or required for normal downloads. NVENC and AMF conversion are unavailable on macOS in this release. Packages include checksums and verifiable GitHub build provenance, but platform publisher signing is still required to avoid operating-system trust warnings. See [Releasing](docs/RELEASING.md).
+| System | Package |
+| --- | --- |
+| Windows 10 or 11, x64 | `x64-setup.exe` |
+| macOS 12 or newer, Apple silicon | `aarch64.dmg` |
+| macOS 12 or newer, Intel | `x64.dmg` |
+| Linux x64 | `amd64.deb` for Debian and Ubuntu, `amd64.AppImage` for other distributions |
+
+Everything needed for downloading is included. Custom tool paths in **Settings → Download engine** are optional.
 
 ## Develop
 

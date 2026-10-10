@@ -124,6 +124,19 @@ pub async fn remove_history_entry(
 ) -> AppResult<()> {
     service.db.remove_history(&job_id).await
 }
+/// Moves a completed download's file to the Recycle Bin or Trash before its entry
+/// is removed. A file that is already gone counts as done.
+#[tauri::command]
+pub async fn trash_job_output(
+    service: State<'_, Arc<AppService>>,
+    job_id: String,
+) -> AppResult<()> {
+    let job = service.db.job(&job_id).await?;
+    match trashable_output(&job).await? {
+        Some(path) => platform::move_to_trash(path).await,
+        None => Ok(()),
+    }
+}
 #[tauri::command]
 pub async fn open_job_output(service: State<'_, Arc<AppService>>, job_id: String) -> AppResult<()> {
     let path = validated_output(&service, &job_id).await?;
@@ -146,23 +159,101 @@ fn containing_directory(path: &Path) -> AppResult<&Path> {
 
 async fn validated_output(service: &Arc<AppService>, job_id: &str) -> AppResult<PathBuf> {
     let job = service.db.job(job_id).await?;
+    let output = recorded_output(&job)?;
+    validate_downloaded_file(&job.request.destination, &output).await
+}
+
+fn recorded_output(job: &DownloadJob) -> AppResult<PathBuf> {
     if job.status != crate::domain::JobStatus::Completed {
         return Err(AppError::Validation(
             "Only completed downloads can be opened".into(),
         ));
     }
-    let output = job
-        .output_path
+    job.output_path
+        .as_deref()
         .map(PathBuf::from)
-        .ok_or_else(|| AppError::Validation("This job has no recorded output file".into()))?;
-    validate_downloaded_file(&job.request.destination, &output).await
+        .ok_or_else(|| AppError::Validation("This job has no recorded output file".into()))
+}
+
+/// The file that removing `job` together with its file may delete, or None when it
+/// is already gone. A playlist records only one of its files, so it is refused.
+async fn trashable_output(job: &DownloadJob) -> AppResult<Option<PathBuf>> {
+    if job.request.is_playlist {
+        return Err(AppError::Validation(
+            "Delete a playlist's files from its folder".into(),
+        ));
+    }
+    let output = recorded_output(job)?;
+    if !tokio::fs::try_exists(&output).await.unwrap_or(false) {
+        return Ok(None);
+    }
+    validate_downloaded_file(&job.request.destination, &output)
+        .await
+        .map(Some)
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use super::containing_directory;
+    use super::{containing_directory, trashable_output};
+    use crate::domain::{DownloadJob, DownloadRequest, JobStatus};
+
+    fn completed_job(destination: &Path, output: &Path) -> DownloadJob {
+        DownloadJob {
+            id: "job-1".into(),
+            request: DownloadRequest {
+                url: "https://example.com/video".into(),
+                destination: destination.to_string_lossy().into_owned(),
+                filename_template: "%(title)s.%(ext)s".into(),
+                is_playlist: false,
+                options: Default::default(),
+            },
+            title: None,
+            status: JobStatus::Completed,
+            progress: Default::default(),
+            created_at: "2026-10-10T00:00:00Z".into(),
+            started_at: None,
+            finished_at: None,
+            output_path: Some(output.to_string_lossy().into_owned()),
+            error_category: None,
+            error_message: None,
+            diagnostics: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn only_a_completed_single_download_inside_its_folder_can_be_deleted() {
+        let downloads = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let file = downloads.path().join("video.mp4");
+        std::fs::write(&file, b"media").unwrap();
+        let outside = elsewhere.path().join("other.mp4");
+        std::fs::write(&outside, b"media").unwrap();
+
+        let job = completed_job(downloads.path(), &file);
+        assert_eq!(
+            trashable_output(&job).await.unwrap(),
+            Some(std::fs::canonicalize(&file).unwrap())
+        );
+
+        let mut failed = job.clone();
+        failed.status = JobStatus::Failed;
+        assert!(trashable_output(&failed).await.is_err());
+
+        let mut playlist = job.clone();
+        playlist.request.is_playlist = true;
+        assert!(trashable_output(&playlist).await.is_err());
+
+        assert!(
+            trashable_output(&completed_job(downloads.path(), &outside))
+                .await
+                .is_err()
+        );
+
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(trashable_output(&job).await.unwrap(), None);
+    }
 
     #[test]
     fn show_in_folder_targets_the_downloaded_files_parent() {

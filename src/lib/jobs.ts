@@ -21,6 +21,11 @@ export function isRunning(status: JobStatus): boolean {
   return runningStatuses.has(status);
 }
 
+/** A finished single download whose file Remove can also move to the trash. */
+export function hasDeletableFile(job: DownloadJob): boolean {
+  return job.status === "completed" && Boolean(job.outputPath) && !job.request.isPlaylist;
+}
+
 export function isStopped(status: JobStatus): boolean {
   return (
     status === "failed" || status === "cancelled" || status === "interrupted"

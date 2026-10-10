@@ -82,7 +82,7 @@ export function JobDetails({ jobId }: { jobId: string }) {
   const closeInspector = useAppStore((state) => state.closeInspector);
   const cancel = useAppStore((state) => state.cancel);
   const retry = useAppStore((state) => state.retry);
-  const removeJob = useAppStore((state) => state.removeJob);
+  const requestRemove = useAppStore((state) => state.requestRemove);
   const reorder = useAppStore((state) => state.reorder);
 
   if (!job) return null;
@@ -249,9 +249,9 @@ export function JobDetails({ jobId }: { jobId: string }) {
           <button
             type="button"
             className="button button--ghost button--danger"
-            onClick={() => void removeJob(job.id)}
+            onClick={() => requestRemove(job.id)}
           >
-            <Trash2 aria-hidden="true" /> Remove from list
+            <Trash2 aria-hidden="true" /> Remove
           </button>
         )}
       </div>

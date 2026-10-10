@@ -16,7 +16,7 @@ import { JobRow } from "./JobRow";
 const emptyCopy: Record<DownloadFilter, string> = {
   all: "",
   downloading: "Nothing is downloading or waiting right now.",
-  completed: "Finished downloads appear here. Removing one never deletes its file.",
+  completed: "Finished downloads appear here.",
   stopped: "Failed, cancelled, and interrupted downloads appear here for retry.",
 };
 
@@ -55,13 +55,13 @@ export function QueueView() {
         state.inspector?.kind === "job" ? state.inspector.id : undefined,
     })),
   );
-  const { selectJob, cancel, retry, removeJob, setPaused, clearCompleted } =
+  const { selectJob, cancel, retry, requestRemove, setPaused, clearCompleted } =
     useAppStore(
       useShallow((state) => ({
         selectJob: state.selectJob,
         cancel: state.cancel,
         retry: state.retry,
-        removeJob: state.removeJob,
+        requestRemove: state.requestRemove,
         setPaused: state.setPaused,
         clearCompleted: state.clearCompleted,
       })),
@@ -145,7 +145,7 @@ export function QueueView() {
                 onSelect={selectJob}
                 onCancel={cancel}
                 onRetry={retry}
-                onRemove={removeJob}
+                onRemove={requestRemove}
               />
             ))}
           </ul>
