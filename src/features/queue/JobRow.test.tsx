@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../../app/store";
@@ -146,5 +146,20 @@ describe("JobDetails", () => {
 
     await user.click(screen.getByRole("button", { name: "Open file" }));
     expect(mocks.openJobOutput).toHaveBeenCalledWith("completed-job");
+  });
+
+  it("shows the video thumbnail beside the title and falls back to the file icon", () => {
+    renderRow({
+      ...completedJob,
+      request: { ...completedJob.request, thumbnail: "https://i.example/thumb.jpg" },
+    });
+
+    const image = document.querySelector(".job-thumb img");
+    expect(image).toHaveAttribute("src", "https://i.example/thumb.jpg");
+    expect(image).toHaveAttribute("loading", "lazy");
+
+    fireEvent.error(image!);
+    expect(document.querySelector(".job-thumb img")).toBeNull();
+    expect(document.querySelector(".job-thumb svg")).not.toBeNull();
   });
 });

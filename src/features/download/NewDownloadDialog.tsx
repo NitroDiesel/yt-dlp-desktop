@@ -976,6 +976,7 @@ export function NewDownloadDialog() {
       destination,
       filenameTemplate: template,
       isPlaylist: probe.isPlaylist,
+      thumbnail: probe.thumbnail,
       options: {
         ...options,
         customFormat,
@@ -1040,7 +1041,7 @@ export function NewDownloadDialog() {
           <div className="callout callout--warning">
             <strong>The bundled downloader couldn't start</strong>
             <p>Reinstall the app to restore its tools, or choose a trusted replacement in Settings.</p>
-            <button type="button" className="button button--outline button--compact" onClick={showSettings}>
+            <button type="button" className="button button--outline button--compact" onClick={() => showSettings("engine")}>
               Open Settings
             </button>
           </div>
@@ -1061,7 +1062,20 @@ export function NewDownloadDialog() {
         )}
 
         {probe && (
-          <section className="media-head" aria-labelledby="media-title">
+          <section
+            className={`media-head ${probe.thumbnail ? "media-head--thumb" : ""}`}
+            aria-labelledby="media-title"
+          >
+            {probe.thumbnail && (
+              <img
+                className="media-head__thumb"
+                src={probe.thumbnail}
+                alt=""
+                decoding="async"
+                referrerPolicy="no-referrer"
+                onError={(event) => (event.currentTarget.hidden = true)}
+              />
+            )}
             <h3 id="media-title">{probe.title}</h3>
             <p className="media-head__meta">
               {probe.creator ? `${probe.creator} on ${hostname(probe.url)}` : hostname(probe.url)}
@@ -1271,6 +1285,8 @@ export function NewDownloadDialog() {
                 value={clipDraft}
                 durationSeconds={probe.durationSeconds}
                 disabledReason={clipDisabledReason}
+                preview={probe.preview}
+                poster={probe.thumbnail}
                 onChange={setClipDraft}
               />
             </FormRow>

@@ -18,7 +18,7 @@ README.md describes shipped capabilities. docs/ARCHITECTURE.md owns backend and 
 
 ## Brand Commitments
 
-A restrained dark theme with system typography, and a conventional downloader layout like Motrix. This is not a browser or a chat interface. Colored edge rails, decorative status borders, and redundant labels are explicitly unwanted.
+A restrained dark theme with system typography, and a conventional download-manager layout. This is not a browser or a chat interface. Colored edge rails, decorative status borders, and redundant labels are explicitly unwanted.
 
 ## Product Principles
 

@@ -63,14 +63,23 @@ export function mergeDownloads(
   return [...inProgress, ...done];
 }
 
+/**
+ * Counts per sidebar filter. Runs on every progress event, so it skips the
+ * sort in mergeDownloads; the queue's copy of a job wins, as it does there.
+ */
 export function countDownloads(
   queue: DownloadJob[],
   history: DownloadJob[],
 ): Record<DownloadFilter, number> {
   const counts = { all: 0, downloading: 0, completed: 0, stopped: 0 };
-  for (const job of mergeDownloads(queue, history)) {
-    counts.all += 1;
-    counts[filterFor(job.status)] += 1;
+  const seen = new Set<string>();
+  for (const list of [queue, history]) {
+    for (const job of list) {
+      if (seen.has(job.id)) continue;
+      seen.add(job.id);
+      counts.all += 1;
+      counts[filterFor(job.status)] += 1;
+    }
   }
   return counts;
 }

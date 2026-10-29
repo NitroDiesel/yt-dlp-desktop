@@ -9,7 +9,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    domain::{MediaFormat, MediaProbe, SubtitleTrack},
+    domain::{MediaFormat, MediaPreview, MediaProbe, SubtitleTrack},
     error::{AppError, AppResult},
     integration::process::{configure_grouped_background_process, terminate_process_tree},
 };
@@ -175,10 +175,61 @@ fn from_json(value: Value, input_url: &str, stderr: &str) -> MediaProbe {
             .get("is_live")
             .and_then(Value::as_bool)
             .unwrap_or(false),
+        thumbnail: thumbnail(&value).or_else(|| {
+            entries
+                .and_then(|entries| entries.first())
+                .and_then(thumbnail)
+        }),
+        preview: preview(&value),
         formats,
         subtitles,
         warnings,
     }
+}
+
+fn https_url(value: &Value, key: &str) -> Option<String> {
+    text(value, key).filter(|url| url.starts_with("https://") && url.len() <= 4096)
+}
+
+/// The smallest thumbnail at least 240px wide, so a long list decodes small
+/// images; falls back to the main thumbnail when sizes are unknown.
+fn thumbnail(value: &Value) -> Option<String> {
+    let sized = value
+        .get("thumbnails")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|thumb| Some((number_u32(thumb, "width")?, https_url(thumb, "url")?)))
+        .filter(|(width, _)| *width >= 240)
+        .min_by_key(|(width, _)| *width)
+        .map(|(_, url)| url);
+    sized.or_else(|| https_url(value, "thumbnail"))
+}
+
+/// A single-file https stream up to 720p for the clip preview. Streams with
+/// sound come first; HLS, DASH, and other segmented protocols can't play in
+/// a plain video element.
+fn preview(value: &Value) -> Option<MediaPreview> {
+    let formats = value.get("formats").and_then(Value::as_array)?;
+    formats
+        .iter()
+        .filter(|format| text(format, "protocol").as_deref() == Some("https"))
+        .filter(|format| matches!(text(format, "ext").as_deref(), Some("mp4" | "webm")))
+        .filter(|format| has_codec(format, "vcodec"))
+        .filter(|format| number_u32(format, "height").is_some_and(|height| height <= 720))
+        .filter_map(|format| {
+            Some(MediaPreview {
+                url: https_url(format, "url")?,
+                width: number_u32(format, "width"),
+                height: number_u32(format, "height"),
+                has_audio: has_codec(format, "acodec"),
+            })
+        })
+        .max_by_key(|preview| (preview.has_audio, preview.height.unwrap_or(0)))
+}
+
+fn has_codec(format: &Value, key: &str) -> bool {
+    text(format, key).is_some_and(|codec| codec != "none")
 }
 
 fn collect_subtitles(target: &mut Vec<SubtitleTrack>, value: Option<&Value>, automatic: bool) {
@@ -270,5 +321,59 @@ mod tests {
         if let Some(home) = dirs::home_dir().and_then(|path| path.to_str().map(str::to_owned)) {
             assert_eq!(redact(&format!("failed at {home}")), "failed at [home]");
         }
+    }
+
+    #[test]
+    fn picks_a_small_https_thumbnail_and_a_playable_preview() {
+        let probe = from_json(
+            serde_json::json!({
+                "id": "abc",
+                "title": "Clip",
+                "thumbnail": "https://i.example/max.jpg",
+                "thumbnails": [
+                    { "url": "https://i.example/small.jpg", "width": 120 },
+                    { "url": "https://i.example/medium.jpg", "width": 320 },
+                    { "url": "http://i.example/insecure.jpg", "width": 250 },
+                    { "url": "https://i.example/max.jpg", "width": 1280 }
+                ],
+                "formats": [
+                    { "format_id": "hls", "ext": "mp4", "protocol": "m3u8_native", "url": "https://v.example/hls", "vcodec": "avc1", "acodec": "mp4a", "height": 360 },
+                    { "format_id": "137", "ext": "mp4", "protocol": "https", "url": "https://v.example/1080", "vcodec": "avc1", "acodec": "none", "height": 1080 },
+                    { "format_id": "134", "ext": "mp4", "protocol": "https", "url": "https://v.example/360-silent", "vcodec": "avc1", "acodec": "none", "height": 360 },
+                    { "format_id": "18", "ext": "mp4", "protocol": "https", "url": "https://v.example/360", "vcodec": "avc1", "acodec": "mp4a", "width": 640, "height": 360 },
+                    { "format_id": "140", "ext": "m4a", "protocol": "https", "url": "https://v.example/audio", "vcodec": "none", "acodec": "mp4a" }
+                ]
+            }),
+            "https://example.com/watch?v=abc",
+            "",
+        );
+        assert_eq!(
+            probe.thumbnail.as_deref(),
+            Some("https://i.example/medium.jpg")
+        );
+        let preview = probe.preview.expect("progressive preview");
+        assert_eq!(preview.url, "https://v.example/360");
+        assert!(preview.has_audio);
+        assert_eq!((preview.width, preview.height), (Some(640), Some(360)));
+    }
+
+    #[test]
+    fn has_no_preview_when_only_segmented_streams_exist() {
+        let probe = from_json(
+            serde_json::json!({
+                "title": "Live",
+                "thumbnail": "https://i.example/live.jpg",
+                "formats": [
+                    { "ext": "mp4", "protocol": "m3u8_native", "url": "https://v.example/hls", "vcodec": "avc1", "acodec": "mp4a", "height": 720 }
+                ]
+            }),
+            "https://example.com/live",
+            "",
+        );
+        assert_eq!(
+            probe.thumbnail.as_deref(),
+            Some("https://i.example/live.jpg")
+        );
+        assert!(probe.preview.is_none());
     }
 }

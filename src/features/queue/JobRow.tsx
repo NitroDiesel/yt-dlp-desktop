@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import {
   FileAudio,
   FileVideo,
@@ -40,6 +40,8 @@ export const JobRow = memo(function JobRow({
   onRemove: (jobId: string) => void;
 }) {
   const title = jobTitle(job);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const thumbnail = thumbnailFailed ? undefined : job.request.thumbnail;
   const running = isRunning(job.status);
   const downloading = job.status === "downloading";
   const Icon = job.request.isPlaylist
@@ -67,7 +69,20 @@ export const JobRow = memo(function JobRow({
         onClick={() => onSelect(job.id)}
       >
         <span className="job-cell job-cell--name">
-          <Icon className="job-row__icon" aria-hidden="true" />
+          <span className="job-thumb" aria-hidden="true">
+            {thumbnail ? (
+              <img
+                src={thumbnail}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
+                onError={() => setThumbnailFailed(true)}
+              />
+            ) : (
+              <Icon />
+            )}
+          </span>
           <span className="job-row__text">
             <span className="job-row__title" title={title}>
               {title}
@@ -92,17 +107,10 @@ export const JobRow = memo(function JobRow({
             aria-valuemin={0}
             aria-valuemax={100}
           >
-            <span style={{ transform: `scaleX(${percent / 100})` }} />
+            <span style={{ transform: `translateX(${percent - 100}%)` }} />
           </span>
-          <span className="progress-line__numbers mono">
-            <span>{percent.toFixed(downloading && percent < 10 ? 1 : 0)}%</span>
-            <span>
-              {progress.downloadedBytes != null && job.status !== "completed"
-                ? formatBytes(progress.downloadedBytes)
-                : size
-                  ? formatBytes(size)
-                  : ""}
-            </span>
+          <span className="progress-line__percent mono">
+            {percent.toFixed(downloading && percent < 10 ? 1 : 0)}%
           </span>
         </span>
         <span className="job-cell job-cell--status">

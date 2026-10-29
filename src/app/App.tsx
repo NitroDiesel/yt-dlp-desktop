@@ -10,10 +10,10 @@ import { SettingsView } from "../features/settings/SettingsView";
 import { useAppStore } from "./store";
 
 export default function App() {
-  const { page, inspector, newDownloadOpen, removing, initialized, fatalError, theme, accent, reducedMotion } =
+  const { settingsOpen, inspector, newDownloadOpen, removing, initialized, fatalError, theme, accent, reducedMotion } =
     useAppStore(
       useShallow((state) => ({
-        page: state.page,
+        settingsOpen: state.settingsOpen,
         inspector: state.inspector,
         newDownloadOpen: state.newDownloadOpen,
         removing: state.removing,
@@ -63,13 +63,14 @@ export default function App() {
   }
 
   const panel =
-    page === "downloads" && inspector ? (
+    inspector ? (
       <JobDetails key={inspector.id} jobId={inspector.id} />
     ) : undefined;
 
   return (
     <AppShell inspector={panel}>
-      {page === "settings" ? <SettingsView /> : <QueueView />}
+      <QueueView />
+      {settingsOpen && <SettingsView />}
       {newDownloadOpen && <NewDownloadDialog />}
       {removing && <RemoveDownloadDialog key={removing} jobId={removing} />}
     </AppShell>

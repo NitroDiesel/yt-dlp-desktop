@@ -47,6 +47,17 @@ export interface MediaProbe {
   formats: MediaFormat[];
   subtitles: SubtitleTrack[];
   warnings: string[];
+  /** A small https thumbnail. */
+  thumbnail?: string;
+  /** A single-file stream the clip editor can play. */
+  preview?: MediaPreview;
+}
+
+export interface MediaPreview {
+  url: string;
+  width?: number;
+  height?: number;
+  hasAudio: boolean;
 }
 
 export interface DownloadOptions {
@@ -134,6 +145,8 @@ export interface DownloadRequest {
   filenameTemplate: string;
   isPlaylist: boolean;
   options: DownloadOptions;
+  /** https thumbnail from analysis, shown in the downloads list. */
+  thumbnail?: string;
 }
 
 export interface DownloadProgress {
@@ -176,6 +189,8 @@ export interface AppSettings {
   theme: "system" | "light" | "dark";
   /** Keep the app's copy of yt-dlp current; checked at launch, at most daily. */
   autoUpdateEngine: boolean;
+  /** Install new yt-dlp Desktop releases when no download is running. */
+  autoUpdateApp: boolean;
   accent: AccentColor;
   reducedMotion: boolean;
   ytDlpPath?: string;
@@ -198,6 +213,11 @@ export interface AppSettings {
   legacyServerConnect?: boolean;
   /** Stamp files with the download time instead of the upload date. */
   useDownloadTime?: boolean;
+}
+
+export interface AppUpdateInfo {
+  version: string;
+  currentVersion: string;
 }
 
 export interface DependencyInfo {

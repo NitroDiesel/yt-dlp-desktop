@@ -11,6 +11,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -41,6 +42,8 @@ pub fn run() {
             commands::remember_download_directory,
             commands::refresh_dependencies,
             commands::update_engine,
+            commands::check_app_update,
+            commands::install_app_update,
             commands::refresh_hardware_acceleration,
             commands::remove_history_entry,
             commands::trash_job_output,

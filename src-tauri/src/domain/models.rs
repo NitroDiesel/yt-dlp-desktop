@@ -41,6 +41,19 @@ pub struct MediaProbe {
     pub formats: Vec<MediaFormat>,
     pub subtitles: Vec<SubtitleTrack>,
     pub warnings: Vec<String>,
+    /// A small https thumbnail, shown beside the title.
+    pub thumbnail: Option<String>,
+    /// A direct https stream the clip editor can play, when the site offers one.
+    pub preview: Option<MediaPreview>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaPreview {
+    pub url: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub has_audio: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -465,6 +478,10 @@ pub struct DownloadRequest {
     #[serde(default)]
     pub is_playlist: bool,
     pub options: DownloadOptions,
+    /// https thumbnail from analysis, shown in the downloads list. Jobs saved
+    /// before v1.1.0 have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -575,6 +592,9 @@ pub struct AppSettings {
     /// Keep the app's copy of yt-dlp current; checked at launch, at most daily.
     #[serde(default = "default_true")]
     pub auto_update_engine: bool,
+    /// Install new yt-dlp Desktop releases from GitHub when the app is idle.
+    #[serde(default = "default_true")]
+    pub auto_update_app: bool,
 }
 
 fn default_true() -> bool {
@@ -622,6 +642,7 @@ impl Default for AppSettings {
             legacy_server_connect: false,
             use_download_time: false,
             auto_update_engine: true,
+            auto_update_app: true,
         }
     }
 }
@@ -791,6 +812,7 @@ mod tests {
         assert!(settings.last_download_directory.is_none());
         assert_eq!(settings.accent, "blue");
         assert!(settings.auto_update_engine);
+        assert!(settings.auto_update_app);
         assert!(settings.legacy_recent_download_directories.is_empty());
     }
 

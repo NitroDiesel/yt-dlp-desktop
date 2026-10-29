@@ -56,7 +56,7 @@ function Progress({ job }: { job: DownloadJob }) {
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        <span style={{ transform: `scaleX(${percent / 100})` }} />
+        <span style={{ transform: `translateX(${percent - 100}%)` }} />
       </div>
       <div className="detail-progress__numbers detail-progress__numbers--muted">
         <span className="mono">

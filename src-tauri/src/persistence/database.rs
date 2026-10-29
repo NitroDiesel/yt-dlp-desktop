@@ -234,6 +234,7 @@ mod tests {
                     "/tmp".into()
                 },
                 filename_template: "%(title)s.%(ext)s".into(),
+                thumbnail: None,
                 is_playlist: false,
                 options: DownloadOptions {
                     mode: MediaMode::Video,

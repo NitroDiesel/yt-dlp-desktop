@@ -81,10 +81,10 @@ jobs:
             bundles: deb,appimage
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
           - os: macos-14
             target: aarch64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -129,9 +129,26 @@ jobs:
         if: runner.os != 'Windows'
         run: bash ./scripts/verify-sidecars.sh '${{ matrix.target }}'
       - run: pnpm tauri build --target '${{ matrix.target }}' --bundles '${{ matrix.bundles }}'
+      # The app updates itself from these packages. Each one is signed with the
+      # updater key, bound to this version; macOS updates use the zipped .app.
+      - name: Sign update packages
+        shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          bundle="src-tauri/target/${{ matrix.target }}/release/bundle"
+          if [ -d "$bundle/macos" ]; then
+            target='${{ matrix.target }}'
+            tar -czf "$bundle/macos/yt-dlp.Desktop_${version}_${target%%-*}.app.tar.gz" -C "$bundle/macos" "yt-dlp Desktop.app"
+          fi
+          find "$bundle" -type f \( -name '*-setup.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.app.tar.gz' \) -print0 |
+            while IFS= read -r -d '' file; do
+              pnpm tauri signer sign --app-version "$version" "$file"
+              test -s "$file.sig"
+            done
       - name: Generate Windows checksums
         if: runner.os == 'Windows'
         shell: pwsh
@@ -147,7 +164,7 @@ jobs:
           while IFS= read -r -d '' file; do
             name="$(basename "$file" | tr ' ' '.')"
             printf '%s  %s\n' "$(shasum -a 256 "$file" | awk '{print $1}')" "$name"
-          done < <(find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) -print0) > "SHA256SUMS-${{ matrix.target }}.txt"
+          done < <(find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.app.tar.gz' \) -print0) > "SHA256SUMS-${{ matrix.target }}.txt"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-${{ matrix.target }}
@@ -156,6 +173,8 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
             SHA256SUMS-${{ matrix.target }}.txt
           if-no-files-found: error
 
@@ -172,6 +191,37 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      # The app reads releases/latest/download/latest.json. GitHub replaces spaces
+      # in asset names with dots, so the URLs do too.
+      - name: Write the update manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          entry() {
+            local file
+            file="$(find artifacts -type f -name "$1" | head -n 1)"
+            test -n "$file" && test -s "$file.sig"
+            jq -n --arg url "$base/$(basename "$file" | tr ' ' '.')" --rawfile signature "$file.sig" \
+              '{url: $url, signature: ($signature | rtrimstr("\n"))}'
+          }
+          windows="$(entry '*_x64-setup.exe')"
+          mac_intel="$(entry '*_x86_64.app.tar.gz')"
+          mac_arm="$(entry '*_aarch64.app.tar.gz')"
+          appimage="$(entry '*.AppImage')"
+          deb="$(entry '*.deb')"
+          jq -n --arg version "$version" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson windows "$windows" --argjson mac_intel "$mac_intel" --argjson mac_arm "$mac_arm" \
+            --argjson appimage "$appimage" --argjson deb "$deb" \
+            '{version: $version, pub_date: $date, notes: "See the release notes on GitHub.", platforms: {
+              "windows-x86_64": $windows, "windows-x86_64-nsis": $windows,
+              "darwin-x86_64": $mac_intel, "darwin-x86_64-app": $mac_intel,
+              "darwin-aarch64": $mac_arm, "darwin-aarch64-app": $mac_arm,
+              "linux-x86_64": $appimage, "linux-x86_64-appimage": $appimage,
+              "linux-x86_64-deb": $deb
+            }}' > artifacts/latest.json
+          cat artifacts/latest.json
       - name: Attest release provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
@@ -180,6 +230,7 @@ jobs:
             artifacts/**/*.dmg
             artifacts/**/*.deb
             artifacts/**/*.AppImage
+            artifacts/**/*.app.tar.gz
             artifacts/yt-dlp-desktop-ffmpeg-source-materials.tar.zst
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
@@ -192,5 +243,8 @@ jobs:
             artifacts/**/*.dmg
             artifacts/**/*.deb
             artifacts/**/*.AppImage
+            artifacts/**/*.app.tar.gz
+            artifacts/**/*.sig
+            artifacts/latest.json
             artifacts/SHA256SUMS-*.txt
             artifacts/yt-dlp-desktop-ffmpeg-source-materials.tar.zst

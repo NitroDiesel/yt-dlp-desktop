@@ -11,6 +11,7 @@ const out = path.resolve("docs/media");
 const port = 9333;
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "readme-shots-"));
 const browser = spawn(chrome, [
+  "--headless=new",
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${profile}`,
   "--hide-scrollbars",

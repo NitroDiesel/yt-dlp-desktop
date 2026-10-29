@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  RefreshCw,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -58,6 +59,7 @@ function useGlobalShortcuts() {
         event.key === "Escape" &&
         store.inspector &&
         !store.newDownloadOpen &&
+        !store.settingsOpen &&
         !isEditable(event.target)
       ) {
         store.closeInspector();
@@ -79,10 +81,13 @@ function useGlobalShortcuts() {
   }, []);
 }
 
-/** Stays mounted while hidden so it can slide; inert keeps it out of focus and assistive tech. */
-function Sidebar({ hidden }: { hidden: boolean }) {
+/**
+ * Full width with labels, or a compact icon rail when collapsed. The rail keeps
+ * every action and the download counts; names show as tooltips.
+ */
+function Sidebar({ collapsed }: { collapsed: boolean }) {
   const {
-    page,
+    settingsOpen,
     filter,
     newDownloadOpen,
     showDownloads,
@@ -91,7 +96,7 @@ function Sidebar({ hidden }: { hidden: boolean }) {
     toggleSidebar,
   } = useAppStore(
     useShallow((state) => ({
-      page: state.page,
+      settingsOpen: state.settingsOpen,
       filter: state.filter,
       newDownloadOpen: state.newDownloadOpen,
       showDownloads: state.showDownloads,
@@ -104,71 +109,114 @@ function Sidebar({ hidden }: { hidden: boolean }) {
     useShallow((state) => countDownloads(state.queue, state.history)),
   );
   return (
-    <div className="sidebar-slot">
-      <aside className="sidebar" inert={hidden} aria-hidden={hidden || undefined}>
-        <div className="sidebar__brand">
-          <img className="brand-mark" src={appIcon} alt="" width={22} height={22} />
-          <span className="sidebar__label">
-            yt-dlp <span>Desktop</span>
-          </span>
-          <button
-            type="button"
-            className="icon-button sidebar__toggle"
-            aria-label="Hide sidebar"
-            title={`Hide sidebar (${modifierKey} B)`}
-            onClick={toggleSidebar}
-          >
-            <PanelLeftClose aria-hidden="true" />
-          </button>
-        </div>
-  
+    <aside className="sidebar">
+      <div className="sidebar__brand">
+        <img className="brand-mark" src={appIcon} alt="" width={22} height={22} />
+        <span className="sidebar__label">
+          yt-dlp <span>Desktop</span>
+        </span>
         <button
           type="button"
-          className={`sidebar-row sidebar-row--new ${newDownloadOpen ? "sidebar-row--active" : ""}`}
-          onClick={() => openNewDownload()}
-          title={`New download (${modifierKey}+N)`}
+          className="icon-button sidebar__toggle"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          title={`${collapsed ? "Expand" : "Collapse"} sidebar (${modifierKey} B)`}
+          onClick={toggleSidebar}
         >
-          <Plus aria-hidden="true" />
-          <span className="sidebar__label">New download</span>
-          <kbd className="sidebar__label">{modifierKey} N</kbd>
+          {collapsed ? (
+            <PanelLeftOpen aria-hidden="true" />
+          ) : (
+            <PanelLeftClose aria-hidden="true" />
+          )}
         </button>
-  
-        <nav className="sidebar__nav" aria-label="Downloads">
-          {filters.map(({ filter: value, icon: Icon }) => {
-            const active = page === "downloads" && filter === value;
-            return (
-              <button
-                key={value}
-                type="button"
-                className={`sidebar-row ${active ? "sidebar-row--active" : ""}`}
-                aria-current={active ? "page" : undefined}
-                title={filterLabels[value]}
-                onClick={() => showDownloads(value)}
-              >
-                <Icon aria-hidden="true" />
-                <span className="sidebar__label">{filterLabels[value]}</span>
-                {counts[value] > 0 && (
-                  <span className="sidebar-row__count">{counts[value]}</span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-  
-        <div className="sidebar__footer">
-          <button
-            type="button"
-            className={`sidebar-row ${page === "settings" ? "sidebar-row--active" : ""}`}
-            aria-current={page === "settings" ? "page" : undefined}
-            title={`Settings (${modifierKey}+,)`}
-            onClick={showSettings}
-          >
-            <Settings aria-hidden="true" />
-            <span className="sidebar__label">Settings</span>
-          </button>
-        </div>
-      </aside>
-    </div>
+      </div>
+
+      <button
+        type="button"
+        className={`sidebar-row sidebar-row--new ${newDownloadOpen ? "sidebar-row--active" : ""}`}
+        onClick={() => openNewDownload()}
+        aria-label="New download"
+        title={`New download (${modifierKey}+N)`}
+      >
+        <Plus aria-hidden="true" />
+        <span className="sidebar__label">New download</span>
+        <kbd className="sidebar__label">{modifierKey} N</kbd>
+      </button>
+
+      <nav className="sidebar__nav" aria-label="Downloads">
+        {filters.map(({ filter: value, icon: Icon }) => {
+          const active = filter === value;
+          const count = counts[value];
+          return (
+            <button
+              key={value}
+              type="button"
+              className={`sidebar-row ${active ? "sidebar-row--active" : ""}`}
+              aria-current={active ? "page" : undefined}
+              aria-label={count > 0 ? `${filterLabels[value]}, ${count}` : filterLabels[value]}
+              title={filterLabels[value]}
+              onClick={() => showDownloads(value)}
+            >
+              <Icon aria-hidden="true" />
+              <span className="sidebar__label">{filterLabels[value]}</span>
+              {count > 0 && (
+                <span className="sidebar-row__count" aria-hidden="true">
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="sidebar__footer">
+        <button
+          type="button"
+          className={`sidebar-row ${settingsOpen ? "sidebar-row--active" : ""}`}
+          aria-label="Settings"
+          title={`Settings (${modifierKey}+,)`}
+          onClick={() => showSettings()}
+        >
+          <Settings aria-hidden="true" />
+          <span className="sidebar__label">Settings</span>
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+/** A newer release: installs on click, or by itself when idle if automatic updates are on. */
+function UpdatePill({ running }: { running: number }) {
+  const { appUpdate, installAppUpdate, showSettings } = useAppStore(
+    useShallow((state) => ({
+      appUpdate: state.appUpdate,
+      installAppUpdate: state.installAppUpdate,
+      showSettings: state.showSettings,
+    })),
+  );
+  if (!appUpdate) return null;
+  const { version, installing, downloaded, total, error } = appUpdate;
+  const label = error
+    ? "Update failed"
+    : installing
+      ? total
+        ? `Updating ${Math.round(((downloaded ?? 0) / total) * 100)}%`
+        : "Updating…"
+      : `Update to ${version}`;
+  return (
+    <button
+      type="button"
+      className={`update-pill ${error ? "update-pill--error" : ""}`}
+      disabled={installing || (!error && running > 0)}
+      title={
+        error ??
+        (running > 0 ? "Available after the current downloads finish" : "Install and restart")
+      }
+      onClick={() => (error ? showSettings("updates") : void installAppUpdate())}
+    >
+      <RefreshCw aria-hidden="true" />
+      {label}
+    </button>
   );
 }
 
@@ -214,53 +262,17 @@ function StatusBar() {
         <span>Failed {stopped}</span>
       </span>
       {queuePaused && <span className="status-bar__paused">Queue paused</span>}
+      <UpdatePill running={running} />
       <button
         type="button"
         className={`engine-pill ${engineReady ? "" : "engine-pill--warning"}`}
-        onClick={showSettings}
+        onClick={() => showSettings("engine")}
         title="Download engine status. Opens Settings."
       >
         <span className="engine-pill__dot" aria-hidden="true" />
         {engineReady ? "Engine ready" : "Engine needs attention"}
       </button>
     </footer>
-  );
-}
-
-/**
- * Shown at the start of each page header while the sidebar is hidden: the way
- * back to the sidebar, and New download, which the sidebar would otherwise hold.
- */
-export function SidebarReveal() {
-  const { collapsed, toggleSidebar, openNewDownload } = useAppStore(
-    useShallow((state) => ({
-      collapsed: state.sidebarCollapsed,
-      toggleSidebar: state.toggleSidebar,
-      openNewDownload: state.openNewDownload,
-    })),
-  );
-  if (!collapsed) return null;
-  return (
-    <div className="sidebar-reveal">
-      <button
-        type="button"
-        className="icon-button"
-        aria-label="Show sidebar"
-        title={`Show sidebar (${modifierKey} B)`}
-        onClick={toggleSidebar}
-      >
-        <PanelLeftOpen aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="icon-button"
-        aria-label="New download"
-        title={`New download (${modifierKey} N)`}
-        onClick={() => openNewDownload()}
-      >
-        <Plus aria-hidden="true" />
-      </button>
-    </div>
   );
 }
 
@@ -278,7 +290,7 @@ export function AppShell({
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <Sidebar hidden={collapsed} />
+      <Sidebar collapsed={collapsed} />
       <div className={`stage ${inspector ? "stage--inspecting" : ""}`}>
         <main className="workspace" id="main-content" tabIndex={-1}>
           {children}

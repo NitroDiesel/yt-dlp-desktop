@@ -23,7 +23,7 @@ Application service ───── Queue scheduler
 ## Modules
 
 - `domain`: serialized contracts, job state machine, settings, dependency metadata, and error categories.
-- `application`: app startup, commands, persistent queue scheduling, recovery, and event emission.
+- `application`: app startup, commands, persistent queue scheduling, recovery, event emission, and app updates.
 - `integration/yt_dlp`: typed argument construction, metadata probing, line protocol parsing, redaction, and the child-process lifecycle.
 - `integration/ffmpeg`: runtime NVENC/AMF capability probes and the cancellation-safe, non-destructive GPU conversion stage.
 - `integration/dependencies`: bundled and explicitly selected custom executable discovery and version checks.
@@ -46,14 +46,18 @@ Application service ───── Queue scheduler
 
 The database lives in the per-user Tauri application-data directory. Jobs, settings, dependency metadata, and the bounded diagnostic tail are transactional. At startup, work left in an active state is marked `interrupted`; queued work is scheduled again. Completed and failed records remain in history until the user removes them. The UI shows the queue and history as one downloads list; "Clear list" in the Completed view removes completed records from both, never the files. Removing one completed single download asks whether to keep its file or delete it too; deleting re-validates the recorded path inside the job's destination and moves the file to the Recycle Bin or Trash (the `trash` crate), never a permanent delete. A playlist records only one of its files, so its files are never deleted this way.
 
-Settings are one JSON document; fields added after a release carry serde defaults, so older saved settings still load (for example, a missing accent color reads as Blue). The one exception to SQLite is whether the sidebar is hidden: it is a window-layout preference, kept in the webview's local storage and never sent to Rust.
+Settings are one JSON document; fields added after a release carry serde defaults, so older saved settings still load (for example, a missing accent color reads as Blue). The one exception to SQLite is whether the sidebar is collapsed to its icon rail: it is a window-layout preference, kept in the webview's local storage and never sent to Rust.
 
 ## Resource use
 
 - Tool version checks run concurrently once per launch and again only on "Check again" or when a custom tool path changes.
 - GPU detection runs real test encodes, so it is deferred until something needs it (opening New download or Settings, or a GPU conversion job) and cached per FFmpeg binary for the session.
 - The UI subscribes to narrow store slices and memoizes download rows, so a progress event re-renders only the affected row, the status bar, and an open details panel.
-- No continuously running CSS animation: status icons are static, progress moves with `transform`, and the analysis skeleton uses a stepped pulse only while a link is being read.
+- No continuously running CSS animation: status icons are static, progress moves with `transform`, and the analysis skeleton uses a stepped pulse only while a link is being read. The clip playhead follows the preview with `requestAnimationFrame` only while it plays.
+- Backdrop blur is drawn only behind an open modal.
+- Sidebar counts are tallied without sorting, since they recompute on every progress event.
+- Analysis picks the smallest thumbnail at least 240px wide, and rows load it lazily, so a long list decodes small images. The clip preview attaches its stream only while the clip editor is open and releases the buffers when it closes.
+- Release builds use link-time optimization, one codegen unit, and stripped symbols for a smaller binary.
 
 Schema changes must be additive migrations. Released migrations are immutable. A future change that cannot be rolled back must include a backup/export path before the migration ships.
 
@@ -68,6 +72,16 @@ Schema changes must be additive migrations. Released migrations are immutable. A
 - Bundled sidecars are pinned to exact versions and verified before packaging.
 - yt-dlp is the one tool that updates after installation, because sites break old releases quickly and yt-dlp itself warns once a build is 90 days old. The app keeps a copy in `<app data>/engine/`, which is writable even where the bundled copy is not (Linux packages, macOS app bundles). It seeds that copy from the bundled build, or replaces it whenever the bundled build is newer, then runs `yt-dlp --update` on it. yt-dlp's own updater fetches the latest stable release from github.com/yt-dlp/yt-dlp and refuses a binary whose SHA-256 does not match the release's `SHA2-256SUMS`. Lookup order is: custom path, then the updated copy, then the bundled build. Automatic updates run in the background at launch, at most every 20 hours (`engine/last-update-check`), and never touch a custom yt-dlp. Every yt-dlp run passes `--no-update`, so the command-line "older than 90 days" warning does not reach the UI.
 - Deno is passed explicitly to yt-dlp as the JavaScript runtime; it is not exposed as a general-purpose UI command.
+
+## Thumbnails and clip preview
+
+Analysis returns an https thumbnail and, when the site offers one, a single-file https stream up to 720p for the clip preview (streams with sound first). HLS, DASH, and other segmented protocols are skipped because a plain video element can't play them. The thumbnail is saved in the job's request (a serde-default field, so older jobs still load); enqueue drops anything that isn't a plain https link. The content security policy allows https images and media for these two uses only; scripts, styles, and connections stay local. The preview URL is never persisted or logged.
+
+## App updates
+
+The app updates itself with the Tauri updater plugin. When **Update automatically** is on, the UI asks Rust to check at launch and every six hours; Rust fetches `releases/latest/download/latest.json` from GitHub through the configured proxy. A found update installs when nothing would be interrupted: no download running or about to start, and no dialog open. The user can also install it from the status bar or Settings, and Rust refuses while a download runs; waiting downloads stay queued and resume after the restart. Development builds never check.
+
+Every package is signed with the project's updater key (minisign; the public key is in `tauri.conf.json`), and each signature carries the version it was signed for. With `requireSignedVersion`, a tampered manifest can't pair a newer version number with an older signed package. Windows runs the NSIS installer in passive mode and it starts the app again; macOS replaces the `.app`; an AppImage replaces itself; a `.deb` installs through pkexec. Progress reaches the UI at most four times a second.
 
 ## Bundled-tools decision
 

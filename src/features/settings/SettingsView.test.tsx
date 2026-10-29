@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../../app/store";
@@ -18,6 +18,7 @@ const settings: AppSettings = {
   theme: "system",
   accent: "blue",
   autoUpdateEngine: true,
+  autoUpdateApp: true,
   reducedMotion: false,
   retries: 10,
   fragmentRetries: 10,
@@ -68,12 +69,21 @@ describe("SettingsView", () => {
       },
       saveSettings: vi.fn(),
       refreshEngineStatus: vi.fn(),
+      settingsSection: "downloads",
+      settingsOpen: true,
+      appUpdate: undefined,
     });
   });
+
+  const openSection = (user: ReturnType<typeof userEvent.setup>, name: string) =>
+    user.click(
+      within(screen.getByRole("navigation", { name: "Settings sections" })).getByRole("button", { name }),
+    );
 
   it("keeps bundled tools ready without asking the user to choose them", async () => {
     const user = userEvent.setup();
     render(<SettingsView />);
+    await openSection(user, "Download engine");
 
     expect(
       screen.getByText(
@@ -111,6 +121,7 @@ describe("SettingsView", () => {
       screen.queryByRole("region", { name: "Unsaved changes" }),
     ).not.toBeInTheDocument();
 
+    await openSection(user, "Appearance");
     await chooseOption(user, screen.getByLabelText("Theme"), "dark");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     expect(saveSettings).toHaveBeenCalledWith(
@@ -130,6 +141,7 @@ describe("SettingsView", () => {
     });
     useAppStore.setState({ updateEngine });
     render(<SettingsView />);
+    await openSection(user, "Download engine");
 
     await user.click(screen.getByRole("button", { name: "Update now" }));
 
@@ -144,6 +156,7 @@ describe("SettingsView", () => {
     const updateEngine = vi.fn().mockRejectedValue("yt-dlp could not update: no internet");
     useAppStore.setState({ saveSettings, updateEngine });
     render(<SettingsView />);
+    await openSection(user, "Download engine");
 
     await user.click(screen.getByRole("button", { name: "Update now" }));
     expect(screen.getByRole("alert")).toHaveTextContent("no internet");
@@ -158,6 +171,7 @@ describe("SettingsView", () => {
     const saveSettings = vi.fn().mockResolvedValue(undefined);
     useAppStore.setState({ saveSettings });
     render(<SettingsView />);
+    await openSection(user, "Appearance");
 
     const accents = screen.getByRole("radiogroup", { name: "Accent color" });
     expect(screen.getByRole("radio", { name: "Blue" })).toBeChecked();
@@ -174,12 +188,14 @@ describe("SettingsView", () => {
     const saveSettings = vi.fn().mockResolvedValue(undefined);
     useAppStore.setState({ saveSettings });
     render(<SettingsView />);
+    await openSection(user, "Network");
 
     await chooseOption(user, screen.getByLabelText("Browser impersonation"), "chrome");
     await chooseOption(user, screen.getByLabelText("Region bypass"), "country");
     await user.clear(screen.getByLabelText("Country code"));
     await user.type(screen.getByLabelText("Country code"), "jp");
     await chooseOption(user, screen.getByLabelText("IP version"), "ipv4");
+    await openSection(user, "Downloads");
     await user.click(screen.getByRole("switch", { name: "Date files by download time" }));
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -191,5 +207,47 @@ describe("SettingsView", () => {
         useDownloadTime: true,
       }),
     );
+  });
+
+  it("finds a section by the settings inside it", async () => {
+    const user = userEvent.setup();
+    render(<SettingsView />);
+
+    await user.type(screen.getByRole("searchbox", { name: "Search settings" }), "proxy");
+
+    const nav = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(within(nav).getAllByRole("button").map((button) => button.textContent)).toEqual(["Network"]);
+    // The matching section opens, so the result is on screen right away.
+    expect(screen.getByLabelText("Proxy")).toBeVisible();
+  });
+
+  it("checks for an app update and saves the automatic update choice", async () => {
+    const user = userEvent.setup();
+    const saveSettings = vi.fn().mockResolvedValue(undefined);
+    const checkAppUpdate = vi.fn(async () => {
+      useAppStore.setState({ appUpdate: { version: "1.2.0", installing: false } });
+      return { version: "1.2.0", currentVersion: "1.1.0" };
+    });
+    const installAppUpdate = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({ saveSettings, checkAppUpdate, installAppUpdate });
+    render(<SettingsView />);
+    await openSection(user, "Updates");
+
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Version 1.2.0 is available.");
+    await user.click(screen.getByRole("button", { name: "Restart and update" }));
+    expect(installAppUpdate).toHaveBeenCalledOnce();
+
+    await user.click(screen.getByRole("switch", { name: "Update automatically" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ autoUpdateApp: false }));
+  });
+
+  it("closes from the close button", async () => {
+    const user = userEvent.setup();
+    render(<SettingsView />);
+
+    await user.click(screen.getByRole("button", { name: "Close settings" }));
+    expect(useAppStore.getState().settingsOpen).toBe(false);
   });
 });

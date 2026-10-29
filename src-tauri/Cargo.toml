@@ -32,6 +32,7 @@ tokio = { version = "1.53.1", features = ["process", "rt-multi-thread", "macros"
 tokio-util = { version = "0.7.16", features = ["rt"] }
 url = "2.5.7"
 uuid = { version = "1.18.1", features = ["v4", "serde"] }
+tauri-plugin-updater = "2.14.1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.175"
@@ -46,3 +47,10 @@ tempfile = "3.22.0"
 # folder stay much smaller. The app's own crate keeps full debug info.
 [profile.dev.package."*"]
 debug = false
+
+# Release builds: one optimization unit with link-time optimization and no
+# symbols, for a smaller binary that loads and runs leaner.
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings,
   AppSnapshot,
+  AppUpdateInfo,
   DownloadJob,
   DownloadRequest,
   MediaProbe,
@@ -38,6 +39,16 @@ export const appApi = {
     invoke<AppSnapshot["hardwareAcceleration"]>(
       "refresh_hardware_acceleration",
       { force },
+    ),
+  /** A newer app release, if there is one; it is kept ready to install. */
+  checkAppUpdate: () => invoke<AppUpdateInfo | null>("check_app_update"),
+  /** Downloads and installs the checked update, then the app restarts. */
+  installAppUpdate: () => invoke<void>("install_app_update"),
+  onAppUpdateProgress: (
+    handler: (progress: { downloaded: number; total?: number }) => void,
+  ): Promise<UnlistenFn> =>
+    listen<{ downloaded: number; total?: number }>("app-update-progress", (event) =>
+      handler(event.payload),
     ),
   removeHistory: (jobId: string) =>
     invoke<void>("remove_history_entry", { jobId }),

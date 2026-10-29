@@ -18,6 +18,8 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use super::updates::{AppUpdateInfo, AppUpdates};
+
 use crate::{
     domain::{
         AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadProgress, DownloadRequest,
@@ -50,6 +52,7 @@ pub struct AppService {
     hardware_cache: RwLock<Option<HardwareCache>>,
     hardware_probe: Mutex<()>,
     engine_update: Mutex<()>,
+    updates: AppUpdates,
 }
 
 struct HardwareCache {
@@ -132,6 +135,7 @@ impl AppService {
             hardware_cache: RwLock::new(None),
             hardware_probe: Mutex::new(()),
             engine_update: Mutex::new(()),
+            updates: AppUpdates::default(),
         }))
     }
 
@@ -223,6 +227,23 @@ impl AppService {
         Ok(dependencies)
     }
 
+    /// Looks for a newer yt-dlp Desktop release, through the configured proxy.
+    pub async fn check_app_update(&self) -> AppResult<Option<AppUpdateInfo>> {
+        let proxy = self.settings.read().await.proxy.clone();
+        self.updates.check(&self.app, proxy.as_deref()).await
+    }
+
+    /// Installs the update found by the last check and restarts. Refused while a
+    /// download runs; waiting downloads stay queued and resume after the restart.
+    pub async fn install_app_update(&self) -> AppResult<()> {
+        if !self.running.lock().await.is_empty() {
+            return Err(AppError::Validation(
+                "Wait for the current downloads to finish, then update".into(),
+            ));
+        }
+        self.updates.install(&self.app).await
+    }
+
     pub async fn probe_media(&self, url: String, no_playlist: bool) -> AppResult<MediaProbe> {
         let settings = self.settings.read().await.clone();
         let executable = self.dependencies.resolve_yt_dlp(&settings).ok_or_else(|| {
@@ -258,9 +279,13 @@ impl AppService {
 
     pub async fn enqueue(
         self: &Arc<Self>,
-        request: DownloadRequest,
+        mut request: DownloadRequest,
         start_immediately: bool,
     ) -> AppResult<DownloadJob> {
+        // Only shown as an image; anything but a plain https link is dropped.
+        request.thumbnail = request
+            .thumbnail
+            .filter(|url| url.starts_with("https://") && url.len() <= 4096);
         let mut settings = self.settings.read().await.clone();
         if settings.deno_path.is_none() {
             settings.deno_path = self
