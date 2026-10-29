@@ -11,6 +11,7 @@ import {
 import { StatusPill } from "../../components/StatusPill";
 import { appApi } from "../../lib/api";
 import { formatBytes, formatDuration } from "../../lib/format";
+import { savedThumbnail } from "../../lib/platform";
 import { isRunning, isStopped, jobMeta, jobTitle } from "../../lib/jobs";
 import type { DownloadJob } from "../../types/contracts";
 
@@ -40,8 +41,12 @@ export const JobRow = memo(function JobRow({
   onRemove: (jobId: string) => void;
 }) {
   const title = jobTitle(job);
-  const [thumbnailFailed, setThumbnailFailed] = useState(false);
-  const thumbnail = thumbnailFailed ? undefined : job.request.thumbnail;
+  // The saved copy first, then the site's own image, then the file icon.
+  const sources = job.request.thumbnail
+    ? [savedThumbnail(job.id), job.request.thumbnail].filter(Boolean)
+    : [];
+  const [failedSources, setFailedSources] = useState(0);
+  const thumbnail = sources[failedSources];
   const running = isRunning(job.status);
   const downloading = job.status === "downloading";
   const Icon = job.request.isPlaylist
@@ -77,7 +82,7 @@ export const JobRow = memo(function JobRow({
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
-                onError={() => setThumbnailFailed(true)}
+                onError={() => setFailedSources((count) => count + 1)}
               />
             ) : (
               <Icon />

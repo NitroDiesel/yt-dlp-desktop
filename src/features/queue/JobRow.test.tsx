@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../lib/api", () => ({ appApi: mocks }));
+vi.mock("../../lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/platform")>()),
+  savedThumbnail: (jobId: string) => `thumb://localhost/${jobId}`,
+}));
 
 const completedJob: DownloadJob = {
   id: "completed-job",
@@ -148,18 +152,21 @@ describe("JobDetails", () => {
     expect(mocks.openJobOutput).toHaveBeenCalledWith("completed-job");
   });
 
-  it("shows the video thumbnail beside the title and falls back to the file icon", () => {
+  it("shows the saved thumbnail, then the site's image, then the file icon", () => {
     renderRow({
       ...completedJob,
       request: { ...completedJob.request, thumbnail: "https://i.example/thumb.jpg" },
     });
 
-    const image = document.querySelector(".job-thumb img");
-    expect(image).toHaveAttribute("src", "https://i.example/thumb.jpg");
-    expect(image).toHaveAttribute("loading", "lazy");
+    const image = () => document.querySelector(".job-thumb img");
+    expect(image()).toHaveAttribute("src", "thumb://localhost/completed-job");
+    expect(image()).toHaveAttribute("loading", "lazy");
 
-    fireEvent.error(image!);
-    expect(document.querySelector(".job-thumb img")).toBeNull();
+    fireEvent.error(image()!);
+    expect(image()).toHaveAttribute("src", "https://i.example/thumb.jpg");
+
+    fireEvent.error(image()!);
+    expect(image()).toBeNull();
     expect(document.querySelector(".job-thumb svg")).not.toBeNull();
   });
 });

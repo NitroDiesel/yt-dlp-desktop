@@ -29,6 +29,7 @@ use crate::{
     integration::{
         dependencies::DependencyManager,
         ffmpeg::run_hardware_conversion,
+        thumbnails::ThumbnailStore,
         yt_dlp::{
             RunnerEvent, build_download_args, needs_ffmpeg, network_args, probe, run_download,
         },
@@ -53,6 +54,7 @@ pub struct AppService {
     hardware_probe: Mutex<()>,
     engine_update: Mutex<()>,
     updates: AppUpdates,
+    thumbnails: ThumbnailStore,
 }
 
 struct HardwareCache {
@@ -136,6 +138,7 @@ impl AppService {
             hardware_probe: Mutex::new(()),
             engine_update: Mutex::new(()),
             updates: AppUpdates::default(),
+            thumbnails: ThumbnailStore::new(data_dir.join("thumbnails")),
         }))
     }
 
@@ -193,7 +196,34 @@ impl AppService {
     pub async fn start(self: &Arc<Self>) -> AppResult<()> {
         let service = self.clone();
         tauri::async_runtime::spawn(async move { service.update_engine_if_due().await });
+        let service = self.clone();
+        tauri::async_runtime::spawn(async move { service.sync_thumbnails().await });
         self.clone().schedule().await
+    }
+
+    /// At launch: drops thumbnails of removed downloads and saves any that are
+    /// missing, one at a time. Failures stay quiet; the list falls back to the
+    /// site's image, then to the file icon.
+    async fn sync_thumbnails(&self) {
+        let (Ok(queue), Ok(history)) = (self.db.queue().await, self.db.history().await) else {
+            return;
+        };
+        let jobs: Vec<DownloadJob> = queue.into_iter().chain(history).collect();
+        let keep = jobs.iter().map(|job| job.id.clone()).collect();
+        self.thumbnails.prune(&keep).await;
+        let proxy = self.settings.read().await.proxy.clone();
+        for job in &jobs {
+            if let Some(url) = job.request.thumbnail.as_deref()
+                && !self.thumbnails.has(&job.id)
+            {
+                let _ = self.thumbnails.fetch(&job.id, url, proxy.as_deref()).await;
+            }
+        }
+    }
+
+    /// The saved thumbnail for a download, for the `thumb` protocol.
+    pub async fn thumbnail(&self, job_id: &str) -> Option<(Vec<u8>, &'static str)> {
+        self.thumbnails.read(job_id).await
     }
 
     /// Once a day at most, when enabled and no custom yt-dlp is set. Failures stay
@@ -354,6 +384,17 @@ impl AppService {
             self.db.next_position().await?
         };
         self.db.insert_job(&job, position).await?;
+        if let Some(url) = job.request.thumbnail.clone() {
+            let service = self.clone();
+            let job_id = job.id.clone();
+            tauri::async_runtime::spawn(async move {
+                let proxy = service.settings.read().await.proxy.clone();
+                let _ = service
+                    .thumbnails
+                    .fetch(&job_id, &url, proxy.as_deref())
+                    .await;
+            });
+        }
         self.clone().schedule().await?;
         Ok(job)
     }
