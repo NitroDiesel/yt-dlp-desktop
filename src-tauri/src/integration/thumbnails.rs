@@ -85,7 +85,10 @@ async fn download(url: &str, proxy: Option<&str>) -> AppResult<Vec<u8>> {
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
-    let mut client = reqwest::Client::builder().timeout(Duration::from_secs(20));
+    // https only, redirects included, so a link can't be downgraded to plain http.
+    let mut client = reqwest::Client::builder()
+        .https_only(true)
+        .timeout(Duration::from_secs(20));
     if let Some(proxy) = proxy {
         client = client.proxy(reqwest::Proxy::all(proxy).map_err(failed)?);
     }
