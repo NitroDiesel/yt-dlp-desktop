@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../app/store";
-import { AppShell, SidebarReveal } from "./AppShell";
+import { AppShell } from "./AppShell";
 
 function paste(target: EventTarget, text: string) {
   const event = new Event("paste", { bubbles: true, cancelable: true });
@@ -16,7 +16,7 @@ function paste(target: EventTarget, text: string) {
 describe("AppShell", () => {
   beforeEach(() => {
     useAppStore.setState({
-      page: "downloads",
+      settingsOpen: false,
       inspector: null,
       newDownloadOpen: false,
       sidebarCollapsed: false,
@@ -58,27 +58,62 @@ describe("AppShell", () => {
     expect(useAppStore.getState().analyze).not.toHaveBeenCalled();
   });
 
-  it("hides the sidebar and brings it back from the page header", async () => {
+  it("collapses the sidebar to an icon rail that keeps every action and count", async () => {
     const user = userEvent.setup();
+    useAppStore.setState({
+      queue: [
+        {
+          id: "job-1",
+          request: {
+            url: "https://example.com/watch?v=1",
+            destination: "C:\\Downloads",
+            filenameTemplate: "%(title)s.%(ext)s",
+            isPlaylist: false,
+            options: {} as never,
+          },
+          status: "downloading",
+          progress: {},
+          createdAt: "2026-10-30T00:00:00Z",
+          diagnostics: [],
+        },
+      ],
+    });
     render(
       <AppShell>
-        <SidebarReveal />
+        <p>Downloads</p>
       </AppShell>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Hide sidebar" }));
-    expect(screen.queryByRole("navigation", { name: "Downloads" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(document.querySelector(".app")).toHaveClass("app--sidebar-collapsed");
     expect(localStorage.getItem("sidebar-collapsed")).toBe("true");
-    // Kept mounted so it can slide out, but out of reach while hidden.
-    expect(document.querySelector(".sidebar")).toHaveAttribute("inert");
+    // The rail still navigates, and its icon buttons keep their names and counts.
+    expect(screen.getByRole("navigation", { name: "Downloads" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Downloading, 1" })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "New download" }));
     expect(useAppStore.getState().newDownloadOpen).toBe(true);
 
-    await user.click(screen.getByRole("button", { name: "Show sidebar" }));
-    expect(screen.getByRole("navigation", { name: "Downloads" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Show sidebar" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(document.querySelector(".app")).not.toHaveClass("app--sidebar-collapsed");
     expect(localStorage.getItem("sidebar-collapsed")).toBe("false");
+  });
+
+  it("offers a found app update in the status bar and installs it on click", async () => {
+    const user = userEvent.setup();
+    const installAppUpdate = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({
+      appUpdate: { version: "1.2.0", installing: false },
+      installAppUpdate,
+    });
+    render(
+      <AppShell>
+        <p>Downloads</p>
+      </AppShell>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Update to 1.2.0" }));
+    expect(installAppUpdate).toHaveBeenCalledOnce();
   });
 
   it("toggles the sidebar with Ctrl+B", () => {

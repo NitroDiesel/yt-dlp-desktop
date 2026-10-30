@@ -19,6 +19,7 @@ const settings: AppSettings = {
   theme: "system",
   accent: "blue",
   autoUpdateEngine: true,
+  autoUpdateApp: true,
   reducedMotion: false,
   retries: 10,
   fragmentRetries: 10,
@@ -550,6 +551,34 @@ describe("NewDownloadDialog", () => {
           referer: "https://example.com/embed",
         }),
       }),
+      true,
+    );
+  });
+
+  it("previews only the selected clip and keeps the thumbnail with the download", async () => {
+    const user = userEvent.setup();
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({
+      enqueue,
+      probe: {
+        ...probe,
+        thumbnail: "https://i.example/abc.jpg",
+        preview: { url: "https://v.example/abc.mp4", width: 640, height: 360, hasAudio: true },
+      },
+    });
+    render(<NewDownloadDialog />);
+
+    // No preview until a timeframe is chosen.
+    expect(screen.queryByLabelText("Clip preview")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: "Download only a selected timeframe" }));
+    const video = screen.getByLabelText("Clip preview");
+    expect(video).toHaveAttribute("src", "https://v.example/abc.mp4");
+    expect(video).toHaveAttribute("poster", "https://i.example/abc.jpg");
+    expect(screen.getByRole("button", { name: "Play preview" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Download" }));
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ thumbnail: "https://i.example/abc.jpg" }),
       true,
     );
   });

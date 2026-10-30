@@ -30,9 +30,9 @@ There are good yt-dlp front-ends already, such as [Parabolic](https://github.com
 
 - **Ready on first launch.** It ships Deno, the JavaScript runtime yt-dlp now needs for YouTube, together with FFmpeg and FFprobe, so merging, audio conversion, and YouTube work without any extra setup.
 - **All of yt-dlp as controls, with no argument box.** Clips by time range, SponsorBlock, chapters, subtitle conversion, playlist date windows and item ranges, dubbed audio tracks, browser impersonation, region bypass, and cookies from your browser are all buttons, switches, and lists.
-- **A real download manager.** One list of every download, laid out like Motrix, with a details panel, paste-a-link-anywhere, and a queue that survives a restart. Downloads stopped by a crash or shutdown are marked so you can resume them.
+- **A real download manager.** One list of every download with its video thumbnail, a details panel, paste-a-link-anywhere, and a queue that survives a restart. Downloads stopped by a crash or shutdown are marked so you can resume them.
 - **GPU conversion that is tested, not guessed.** NVENC and AMF codecs appear only after a real test encode succeeds on your GPU and driver.
-- **yt-dlp that stays current safely.** The app updates its own copy of yt-dlp through yt-dlp's updater, which checks each download against the official release checksums. The bundled build stays as a fallback.
+- **Stays current safely.** New versions of the app install themselves from this repository's releases once no download is running, and each one must carry the project's update signature. The app also updates its own copy of yt-dlp through yt-dlp's updater, which checks each download against the official release checksums, with the bundled build as a fallback.
 - **Careful with your computer.** yt-dlp runs as a direct process with typed arguments and never through a shell. The app only opens or deletes files it downloaded into the folder you chose, and deleted files go to the Recycle Bin or Trash. It sends no telemetry, and cookie files are read in place, never copied.
 - **Free and open source,** under the GPL, with no account, ads, or subscription. Every release publishes checksums and GitHub build provenance, so you can check that an installer came from this repository.
 
@@ -46,7 +46,7 @@ There are good yt-dlp front-ends already, such as [Parabolic](https://github.com
 - Reads a video, playlist, or channel link before downloading and shows its title, length, and formats.
 - Video or audio only, quality from best down to 144p, MP4, MKV, or WebM, and MP3, M4A, Opus, FLAC, or WAV at a chosen bitrate.
 - Exact stream picking, codec preference, subtitles in any offered language, embedded metadata, thumbnails, and chapters.
-- Downloads only part of a video, with exact cuts or a faster keyframe cut.
+- Downloads only part of a video, with a preview that plays just the selected part, and exact cuts or a faster keyframe cut.
 - Downloads list filtered by Downloading, Completed, and Stopped, with pause, reorder, retry, cancel, open, and show in folder.
 - Remove a download from the list and choose whether to keep its file or move it to the Recycle Bin or Trash.
 - Remembers your last folder, accent color, theme, and sidebar layout.
@@ -63,7 +63,7 @@ Download the package for your system from the [latest release](https://github.co
 | macOS 12 or newer, Intel | `x64.dmg` |
 | Linux x64 | `amd64.deb` for Debian and Ubuntu, `amd64.AppImage` for other distributions |
 
-Everything needed for downloading is included. Custom tool paths in **Settings → Download engine** are optional.
+Everything needed for downloading is included. Custom tool paths in **Settings → Download engine** are optional. From version 1.1.0 the app updates itself; turn that off in **Settings → Updates**.
 
 ## Develop
 

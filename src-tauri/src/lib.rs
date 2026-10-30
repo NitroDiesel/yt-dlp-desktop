@@ -6,11 +6,39 @@ pub mod integration;
 mod persistence;
 mod platform;
 
-use tauri::Manager;
+use std::sync::Arc;
+
+use tauri::{
+    Manager,
+    http::{Response, StatusCode, header},
+};
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // Saved thumbnails, addressed by job ID: thumb://localhost/<id>
+        // (http://thumb.localhost/<id> on Windows).
+        .register_asynchronous_uri_scheme_protocol("thumb", |context, request, responder| {
+            let app = context.app_handle().clone();
+            let job_id = request.uri().path().trim_start_matches('/').to_owned();
+            tauri::async_runtime::spawn(async move {
+                let image = match app.try_state::<Arc<application::AppService>>() {
+                    Some(service) => service.thumbnail(&job_id).await,
+                    None => None,
+                };
+                let response = match image {
+                    Some((bytes, mime)) => Response::builder()
+                        .header(header::CONTENT_TYPE, mime)
+                        .header(header::CACHE_CONTROL, "max-age=31536000, immutable")
+                        .body(bytes),
+                    None => Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body(Vec::new()),
+                };
+                responder.respond(response.expect("static thumbnail response"));
+            });
+        })
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -41,6 +69,8 @@ pub fn run() {
             commands::remember_download_directory,
             commands::refresh_dependencies,
             commands::update_engine,
+            commands::check_app_update,
+            commands::install_app_update,
             commands::refresh_hardware_acceleration,
             commands::remove_history_entry,
             commands::trash_job_output,

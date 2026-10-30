@@ -1,6 +1,13 @@
 import { mockIPC } from "@tauri-apps/api/mocks";
 import type { AppSnapshot, DownloadJob, MediaProbe } from "./types/contracts";
 
+/** Offline stand-in thumbnails: a soft two-tone gradient per row. */
+function previewThumbnail(index: number): string {
+  const hue = (index * 47) % 360;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'><defs><linearGradient id='g' x2='1' y2='1'><stop offset='0' stop-color='hsl(${hue} 45% 42%)'/><stop offset='1' stop-color='hsl(${(hue + 60) % 360} 50% 18%)'/></linearGradient></defs><rect width='16' height='9' fill='url(%23g)'/></svg>`;
+  return `data:image/svg+xml,${svg}`;
+}
+
 function previewJob(
   title: string,
   status: DownloadJob["status"],
@@ -18,6 +25,7 @@ function previewJob(
       destination: "D:\\Downloads\\Sound library",
       filenameTemplate: "%(title)s.%(ext)s",
       isPlaylist: false,
+      thumbnail: previewThumbnail(index),
       options: {
         mode: "audio", quality: "best", audioFormat: "mp3", audioQuality: "320K",
         subtitleLanguages: [], writeSubtitles: false, writeAutomaticSubtitles: false,
@@ -77,6 +85,7 @@ const snapshot: AppSnapshot = {
     theme: "dark",
     accent: "blue",
     autoUpdateEngine: true,
+    autoUpdateApp: true,
     reducedMotion: false,
     retries: 10,
     fragmentRetries: 10,
@@ -152,6 +161,7 @@ const probe: MediaProbe = {
   ],
   subtitles: [],
   warnings: [],
+  thumbnail: "data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 9%27><rect width=%2716%27 height=%279%27 fill=%27%23345%27/></svg>",
 };
 
 export async function installVisualPreview() {
@@ -179,6 +189,10 @@ export async function installVisualPreview() {
           return snapshot;
         case "probe_media":
           return probe;
+        case "check_app_update":
+          return params.has("update") ? { version: "1.2.0", currentVersion: "1.1.0" } : null;
+        case "plugin:app|version":
+          return "1.1.0";
         case "refresh_dependencies":
         case "update_engine":
           return snapshot.dependencies;

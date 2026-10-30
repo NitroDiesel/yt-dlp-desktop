@@ -18,6 +18,8 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use super::updates::{AppUpdateInfo, AppUpdates};
+
 use crate::{
     domain::{
         AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadProgress, DownloadRequest,
@@ -27,6 +29,7 @@ use crate::{
     integration::{
         dependencies::DependencyManager,
         ffmpeg::run_hardware_conversion,
+        thumbnails::ThumbnailStore,
         yt_dlp::{
             RunnerEvent, build_download_args, needs_ffmpeg, network_args, probe, run_download,
         },
@@ -50,6 +53,8 @@ pub struct AppService {
     hardware_cache: RwLock<Option<HardwareCache>>,
     hardware_probe: Mutex<()>,
     engine_update: Mutex<()>,
+    updates: AppUpdates,
+    thumbnails: ThumbnailStore,
 }
 
 struct HardwareCache {
@@ -132,6 +137,8 @@ impl AppService {
             hardware_cache: RwLock::new(None),
             hardware_probe: Mutex::new(()),
             engine_update: Mutex::new(()),
+            updates: AppUpdates::default(),
+            thumbnails: ThumbnailStore::new(data_dir.join("thumbnails")),
         }))
     }
 
@@ -189,7 +196,34 @@ impl AppService {
     pub async fn start(self: &Arc<Self>) -> AppResult<()> {
         let service = self.clone();
         tauri::async_runtime::spawn(async move { service.update_engine_if_due().await });
+        let service = self.clone();
+        tauri::async_runtime::spawn(async move { service.sync_thumbnails().await });
         self.clone().schedule().await
+    }
+
+    /// At launch: drops thumbnails of removed downloads and saves any that are
+    /// missing, one at a time. Failures stay quiet; the list falls back to the
+    /// site's image, then to the file icon.
+    async fn sync_thumbnails(&self) {
+        let (Ok(queue), Ok(history)) = (self.db.queue().await, self.db.history().await) else {
+            return;
+        };
+        let jobs: Vec<DownloadJob> = queue.into_iter().chain(history).collect();
+        let keep = jobs.iter().map(|job| job.id.clone()).collect();
+        self.thumbnails.prune(&keep).await;
+        let proxy = self.settings.read().await.proxy.clone();
+        for job in &jobs {
+            if let Some(url) = job.request.thumbnail.as_deref()
+                && !self.thumbnails.has(&job.id)
+            {
+                let _ = self.thumbnails.fetch(&job.id, url, proxy.as_deref()).await;
+            }
+        }
+    }
+
+    /// The saved thumbnail for a download, for the `thumb` protocol.
+    pub async fn thumbnail(&self, job_id: &str) -> Option<(Vec<u8>, &'static str)> {
+        self.thumbnails.read(job_id).await
     }
 
     /// Once a day at most, when enabled and no custom yt-dlp is set. Failures stay
@@ -221,6 +255,23 @@ impl AppService {
         let dependencies = self.dependencies().await;
         let _ = self.app.emit("dependencies-changed", &dependencies);
         Ok(dependencies)
+    }
+
+    /// Looks for a newer yt-dlp Desktop release, through the configured proxy.
+    pub async fn check_app_update(&self) -> AppResult<Option<AppUpdateInfo>> {
+        let proxy = self.settings.read().await.proxy.clone();
+        self.updates.check(&self.app, proxy.as_deref()).await
+    }
+
+    /// Installs the update found by the last check and restarts. Refused while a
+    /// download runs; waiting downloads stay queued and resume after the restart.
+    pub async fn install_app_update(&self) -> AppResult<()> {
+        if !self.running.lock().await.is_empty() {
+            return Err(AppError::Validation(
+                "Wait for the current downloads to finish, then update".into(),
+            ));
+        }
+        self.updates.install(&self.app).await
     }
 
     pub async fn probe_media(&self, url: String, no_playlist: bool) -> AppResult<MediaProbe> {
@@ -258,9 +309,13 @@ impl AppService {
 
     pub async fn enqueue(
         self: &Arc<Self>,
-        request: DownloadRequest,
+        mut request: DownloadRequest,
         start_immediately: bool,
     ) -> AppResult<DownloadJob> {
+        // Only shown as an image; anything but a plain https link is dropped.
+        request.thumbnail = request
+            .thumbnail
+            .filter(|url| url.starts_with("https://") && url.len() <= 4096);
         let mut settings = self.settings.read().await.clone();
         if settings.deno_path.is_none() {
             settings.deno_path = self
@@ -329,6 +384,17 @@ impl AppService {
             self.db.next_position().await?
         };
         self.db.insert_job(&job, position).await?;
+        if let Some(url) = job.request.thumbnail.clone() {
+            let service = self.clone();
+            let job_id = job.id.clone();
+            tauri::async_runtime::spawn(async move {
+                let proxy = service.settings.read().await.proxy.clone();
+                let _ = service
+                    .thumbnails
+                    .fetch(&job_id, &url, proxy.as_deref())
+                    .await;
+            });
+        }
         self.clone().schedule().await?;
         Ok(job)
     }

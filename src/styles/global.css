@@ -3,8 +3,9 @@
  * hairlines, system type, oklch(0.571 0.21 264) primary. Layout is a desktop
  * download manager.
  *
- * Performance rules: no backdrop-filter, no continuously running animation,
- * progress moves with transform only, long lists skip off-screen rows.
+ * Performance rules: backdrop blur only behind an open modal, no continuously
+ * running animation, progress moves with transform only, long lists skip
+ * off-screen rows.
  */
 
 :root {
@@ -14,6 +15,7 @@
   --radius: 10px;
   --control-radius: 8px;
   --sidebar-width: 232px;
+  --rail-width: 56px;
   --inspector-width: 400px;
   --topbar-height: 52px;
   --statusbar-height: 28px;
@@ -39,6 +41,8 @@
   --row-selected: #1a1a1b;
   --segment-active: #1e1e1f;
   --track: rgb(255 255 255 / 8%);
+  --hatch: rgb(255 255 255 / 13%);
+  --modal-shadow: inset 0 1px rgb(255 255 255 / 4%), 0 24px 72px -20px rgb(0 0 0 / 90%);
   --switch-off: rgb(255 255 255 / 16%);
   --ring: var(--tint-dark);
   --info: #60a5fa;
@@ -75,6 +79,8 @@
   --row-selected: #ececee;
   --segment-active: #ffffff;
   --track: #e4e4e7;
+  --hatch: rgb(0 0 0 / 14%);
+  --modal-shadow: 0 24px 64px -24px rgb(0 0 0 / 28%);
   --switch-off: #d4d4d8;
   --ring: var(--tint-light);
   --info: #1d4ed8;
@@ -112,6 +118,8 @@
     --row-selected: #ececee;
     --segment-active: #ffffff;
     --track: #e4e4e7;
+    --hatch: rgb(0 0 0 / 14%);
+    --modal-shadow: 0 24px 64px -24px rgb(0 0 0 / 28%);
     --switch-off: #d4d4d8;
     --ring: var(--tint-light);
     --info: #1d4ed8;
@@ -368,22 +376,14 @@ kbd {
 
 /* ---------- Sidebar ---------- */
 
-.sidebar-slot {
-  grid-area: sidebar;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* Fixed width inside a slot that shrinks, so hiding slides it out instead of squeezing it. */
 .sidebar {
+  grid-area: sidebar;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: var(--sidebar-width);
-  height: 100%;
+  min-width: 0;
   min-height: 0;
-  transition: transform 200ms var(--ease-out);
+  overflow: hidden;
   padding: 0 8px 8px;
   border-right: 1px solid var(--border);
   background: var(--card);
@@ -426,12 +426,14 @@ kbd {
 }
 
 .sidebar-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   height: 32px;
   padding: 0 10px;
+  white-space: nowrap;
   border: 0;
   border-radius: var(--control-radius);
   background: none;
@@ -1061,7 +1063,7 @@ input[type="range"] {
   background: var(--warning-surface);
 }
 
-/* ---------- Downloads table (Motrix-style) ---------- */
+/* ---------- Downloads table ---------- */
 
 .downloads-header {
   display: flex;
@@ -1129,7 +1131,7 @@ input[type="range"] {
 }
 
 .job-table__head .job-cell--name {
-  padding-left: 28px;
+  padding-left: 76px;
 }
 
 .job-list {
@@ -1142,7 +1144,7 @@ input[type="range"] {
   position: relative;
   border-bottom: 1px solid var(--border);
   content-visibility: auto;
-  contain-intrinsic-size: auto 52px;
+  contain-intrinsic-size: auto 60px;
 }
 
 .job-row:hover {
@@ -1156,7 +1158,7 @@ input[type="range"] {
 
 .job-row__select {
   width: 100%;
-  min-height: 52px;
+  min-height: 60px;
   border: 0;
   background: none;
   text-align: left;
@@ -1176,7 +1178,24 @@ input[type="range"] {
   gap: 10px;
 }
 
-.job-row__icon {
+.job-thumb {
+  display: grid;
+  flex: none;
+  width: 64px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--muted);
+  place-items: center;
+}
+
+.job-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.job-thumb svg {
   width: 18px;
   height: 18px;
   color: var(--muted-foreground);
@@ -1215,20 +1234,31 @@ input[type="range"] {
   color: var(--muted-foreground);
 }
 
-.progress-line {
+.job-cell--progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The fill slides in from the left, so its rounded end stays round at any width. */
+.progress-line,
+.progress-track {
   display: block;
-  height: 4px;
+  flex: 1;
+  min-width: 0;
+  height: 8px;
   overflow: hidden;
-  border-radius: 2px;
-  background: var(--track);
+  border-radius: 4px;
+  background: repeating-linear-gradient(-45deg, var(--hatch) 0 1.5px, transparent 1.5px 5px);
 }
 
 .progress-line > span,
 .progress-track span {
   display: block;
   height: 100%;
+  border-radius: 4px;
   background: var(--primary);
-  transform-origin: left center;
+  transform: translateX(-100%);
   transition: transform 250ms linear;
 }
 
@@ -1246,13 +1276,12 @@ input[type="range"] {
   background: var(--muted-foreground);
 }
 
-.progress-line__numbers {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
+.progress-line__percent {
+  flex: none;
+  min-width: 34px;
   color: var(--muted-foreground);
   font-size: 11px;
+  text-align: right;
 }
 
 .job-row__actions {
@@ -1347,8 +1376,25 @@ input[type="range"] {
   animation: dialog-in 140ms ease-out;
 }
 
-.task-dialog::backdrop {
-  background: rgb(0 0 0 / 50%);
+/* Literal colors: older WebKit doesn't pass custom properties to ::backdrop. */
+.task-dialog::backdrop,
+.settings-dialog::backdrop {
+  background: rgb(10 10 10 / 62%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: fade-in 200ms var(--ease-out);
+}
+
+:root[data-theme="light"] .task-dialog::backdrop,
+:root[data-theme="light"] .settings-dialog::backdrop {
+  background: rgb(250 250 250 / 58%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .task-dialog::backdrop,
+  :root[data-theme="system"] .settings-dialog::backdrop {
+    background: rgb(250 250 250 / 58%);
+  }
 }
 
 @keyframes dialog-in {
@@ -1711,6 +1757,32 @@ input[type="range"] {
   font-size: 12px;
 }
 
+.media-head--thumb {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-content: start;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+
+.media-head--thumb > :not(img) {
+  grid-column: 2;
+}
+
+/* A thumbnail that fails to load is hidden and the text takes the full width. */
+.media-head--thumb:has(> img[hidden]) {
+  display: flex;
+}
+
+.media-head__thumb {
+  grid-row: 1 / span 4;
+  width: 128px;
+  height: 72px;
+  border-radius: 6px;
+  background: var(--muted);
+  object-fit: cover;
+}
+
 .media-head .tags {
   margin-top: 2px;
 }
@@ -1767,57 +1839,144 @@ input[type="range"] {
   gap: 6px;
 }
 
-.clip__track {
+.clip__frame {
   position: relative;
-  height: 20px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--control-radius);
+  background: #000;
 }
 
-.clip__track::before {
+.clip__frame--portrait {
+  width: auto;
+  height: 300px;
+  margin: 0 auto;
+  aspect-ratio: 9 / 16;
+}
+
+.clip__frame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.clip__play {
   position: absolute;
-  top: 8px;
-  right: 0;
-  left: 0;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--track);
-  content: "";
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  transition: opacity 150ms var(--ease-out);
 }
 
+.clip__play svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* While playing, the button stays out of the way until the pointer is over the video. */
+.clip__play--playing {
+  opacity: 0;
+}
+
+.clip__frame:hover .clip__play--playing,
+.clip__play:focus-visible {
+  opacity: 1;
+}
+
+.clip__preview-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.clip__track {
+  --clip-handle: 14px;
+  position: relative;
+  height: 40px;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  background: #000;
+}
+
+/* Spans from the outer edge of one handle to the other, like a trimmer frame. */
 .clip__selection {
   position: absolute;
-  top: 8px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--primary);
+  top: -1px;
+  bottom: -1px;
+  border-block: 2px solid var(--primary);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
+  pointer-events: none;
 }
 
-/* Two stacked native ranges: only the thumbs take pointer input. */
+.clip__playhead {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: calc(var(--clip-handle) / 2 - 1.5px);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 35%);
+  pointer-events: none;
+}
+
+/* Two stacked native ranges: only the handles take pointer input. */
 .clip__range {
   position: absolute;
   inset: 0;
-  height: 20px;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   appearance: none;
   background: none;
   pointer-events: none;
 }
 
+.clip__range::-webkit-slider-runnable-track {
+  height: 100%;
+  background: none;
+}
+
 .clip__range::-webkit-slider-thumb {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--primary);
-  border-radius: 50%;
+  width: var(--clip-handle);
+  height: 40px;
+  margin-top: -1px;
+  border-radius: 5px;
   appearance: none;
-  background: var(--foreground);
+  background:
+    linear-gradient(90deg, transparent 4px, rgb(255 255 255 / 75%) 4px 5px, transparent 5px 6.5px, rgb(255 255 255 / 75%) 6.5px 7.5px, transparent 7.5px 9px, rgb(255 255 255 / 75%) 9px 10px, transparent 10px) center / 100% 14px no-repeat,
+    var(--primary);
+  cursor: ew-resize;
   pointer-events: auto;
 }
 
 .clip__range::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--primary);
-  border-radius: 50%;
-  background: var(--foreground);
+  width: var(--clip-handle);
+  height: 40px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--primary);
+  cursor: ew-resize;
   pointer-events: auto;
+}
+
+.clip__range:focus-visible {
+  outline: none;
+}
+
+.clip__range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--foreground);
+  outline-offset: 1px;
 }
 
 .clip__scale {
@@ -1979,13 +2138,6 @@ input[type="range"] {
   font-size: 12px;
 }
 
-.progress-track {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--track);
-}
-
 .facts {
   display: flex;
   flex-direction: column;
@@ -2041,6 +2193,157 @@ input[type="range"] {
 
 /* ---------- Settings ---------- */
 
+/* A modal over the downloads list: section list left, one section right. */
+.settings-dialog {
+  width: min(960px, calc(100vw - 64px));
+  max-width: none;
+  height: min(680px, calc(100vh - 64px));
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--input);
+  border-radius: 16px;
+  background: var(--background);
+  box-shadow: var(--modal-shadow);
+  color: var(--foreground);
+}
+
+.settings-dialog[open] {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  animation: dialog-in 140ms ease-out;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px 8px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+}
+
+.settings-nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--input);
+  border-radius: var(--control-radius);
+  background: var(--input-surface);
+  color: var(--muted-foreground);
+}
+
+.settings-search:focus-within {
+  border-color: var(--ring);
+}
+
+.settings-search svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-search input {
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--foreground);
+}
+
+.settings-search input:focus-visible {
+  outline: none;
+}
+
+.settings-search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.settings-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: none;
+  font-size: 13px;
+  text-align: left;
+}
+
+.settings-nav__item svg {
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
+
+.settings-nav__item:hover {
+  background: var(--accent);
+}
+
+.settings-nav__item--active,
+.settings-nav__item--active:hover {
+  background: var(--row-selected);
+  font-weight: 500;
+}
+
+.settings-nav__item--active svg {
+  color: var(--foreground);
+}
+
+.settings-nav__empty {
+  padding: 6px 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.settings-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.settings-main__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 48px;
+  padding: 0 10px 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.settings-crumb strong {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
 .settings {
   display: flex;
   flex: 1;
@@ -2053,7 +2356,7 @@ input[type="range"] {
 
 .settings > * {
   width: 100%;
-  max-width: 760px;
+  max-width: 720px;
   margin: 0 auto;
 }
 
@@ -2069,13 +2372,6 @@ input[type="range"] {
   justify-content: space-between;
   gap: 16px;
   padding: 0 4px;
-}
-
-.settings-section__header h2 {
-  color: var(--foreground);
-  font-weight: 400;
-  font-size: 14px;
-  opacity: 0.75;
 }
 
 .settings-section__header p {
@@ -2246,6 +2542,38 @@ input[type="range"] {
   font-size: 12px;
 }
 
+.update-pill {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--primary-surface);
+  color: var(--foreground);
+  font-size: 11px;
+}
+
+.update-pill svg {
+  width: 12px;
+  height: 12px;
+}
+
+.update-pill + .engine-pill {
+  margin-left: 0;
+}
+
+.update-pill:disabled {
+  opacity: 0.7;
+}
+
+.update-pill--error {
+  background: var(--error-surface);
+  color: var(--error);
+}
+
 /* ---------- App states ---------- */
 
 .center-state {
@@ -2289,34 +2617,47 @@ input[type="range"] {
   }
 }
 
-/* ---------- Sidebar toggle ---------- */
+/* ---------- Sidebar rail ---------- */
 
-/* Hidden sidebar: its column closes while it slides out, then the stage has the full width. */
+/* Collapsed: icons only, with counts as small badges. The column narrows in 200ms. */
 .app--sidebar-collapsed {
-  grid-template-columns: 0px minmax(0, 1fr);
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
 }
 
 .app--sidebar-collapsed .sidebar {
-  transform: translateX(-100%);
+  padding: 0 8px 8px;
+}
+
+.app--sidebar-collapsed .sidebar__label,
+.app--sidebar-collapsed .brand-mark {
+  display: none;
+}
+
+.app--sidebar-collapsed .sidebar__brand,
+.app--sidebar-collapsed .sidebar-row {
+  justify-content: center;
+  padding: 0;
+}
+
+.app--sidebar-collapsed .sidebar__toggle {
+  margin: 0;
+}
+
+.app--sidebar-collapsed .sidebar-row {
+  height: 36px;
+}
+
+.app--sidebar-collapsed .sidebar-row__count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .sidebar__toggle {
   margin-left: auto;
-}
-
-.header-lead {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-/* Sits where the sidebar edge was, in line with the header title. */
-.sidebar-reveal {
-  display: flex;
-  gap: 2px;
-  margin-left: -10px;
-  animation: fade-in 200ms var(--ease-out);
 }
 
 @keyframes fade-in {
@@ -2325,22 +2666,14 @@ input[type="range"] {
   }
 }
 
-/* Small windows: the sidebar becomes an icon rail. */
+/* Small windows: always the icon rail, so the toggle has nothing to do. */
 @media (max-width: 760px) {
-  .sidebar__toggle {
-    display: none;
+  .app {
+    grid-template-columns: var(--rail-width) minmax(0, 1fr);
   }
 
-  :root {
-    --sidebar-width: 52px;
-  }
-
-  .sidebar {
-    padding: 0 6px 6px;
-  }
-
-  .sidebar__label,
-  .sidebar-row__count {
+  .sidebar__toggle,
+  .sidebar__label {
     display: none;
   }
 
@@ -2350,9 +2683,13 @@ input[type="range"] {
     padding: 0;
   }
 
-  .job-table__head,
-  .job-row__select {
-    grid-template-columns: 18px minmax(0, 1fr) 112px;
+  .sidebar-row__count {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    margin: 0;
+    font-size: 10px;
+    line-height: 1;
   }
 
   .settings-row__main {

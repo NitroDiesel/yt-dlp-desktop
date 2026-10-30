@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../../app/store";
@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../lib/api", () => ({ appApi: mocks }));
+vi.mock("../../lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/platform")>()),
+  savedThumbnail: (jobId: string) => `thumb://localhost/${jobId}`,
+}));
 
 const completedJob: DownloadJob = {
   id: "completed-job",
@@ -146,5 +150,23 @@ describe("JobDetails", () => {
 
     await user.click(screen.getByRole("button", { name: "Open file" }));
     expect(mocks.openJobOutput).toHaveBeenCalledWith("completed-job");
+  });
+
+  it("shows the saved thumbnail, then the site's image, then the file icon", () => {
+    renderRow({
+      ...completedJob,
+      request: { ...completedJob.request, thumbnail: "https://i.example/thumb.jpg" },
+    });
+
+    const image = () => document.querySelector(".job-thumb img");
+    expect(image()).toHaveAttribute("src", "thumb://localhost/completed-job");
+    expect(image()).toHaveAttribute("loading", "lazy");
+
+    fireEvent.error(image()!);
+    expect(image()).toHaveAttribute("src", "https://i.example/thumb.jpg");
+
+    fireEvent.error(image()!);
+    expect(image()).toBeNull();
+    expect(document.querySelector(".job-thumb svg")).not.toBeNull();
   });
 });

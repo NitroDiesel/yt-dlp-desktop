@@ -6,7 +6,7 @@ use std::{
 use tauri::State;
 
 use crate::{
-    application::{AppService, validate_downloaded_file},
+    application::{AppService, AppUpdateInfo, validate_downloaded_file},
     domain::{
         AppSettings, AppSnapshot, DependencyInfo, DownloadJob, DownloadRequest,
         HardwareAccelerationInfo, MediaProbe,
@@ -118,6 +118,16 @@ pub async fn refresh_hardware_acceleration(
     Ok(service.hardware_acceleration(force.unwrap_or(true)).await)
 }
 #[tauri::command]
+pub async fn check_app_update(
+    service: State<'_, Arc<AppService>>,
+) -> AppResult<Option<AppUpdateInfo>> {
+    service.check_app_update().await
+}
+#[tauri::command]
+pub async fn install_app_update(service: State<'_, Arc<AppService>>) -> AppResult<()> {
+    service.install_app_update().await
+}
+#[tauri::command]
 pub async fn remove_history_entry(
     service: State<'_, Arc<AppService>>,
     job_id: String,
@@ -206,6 +216,7 @@ mod tests {
                 url: "https://example.com/video".into(),
                 destination: destination.to_string_lossy().into_owned(),
                 filename_template: "%(title)s.%(ext)s".into(),
+                thumbnail: None,
                 is_playlist: false,
                 options: Default::default(),
             },
