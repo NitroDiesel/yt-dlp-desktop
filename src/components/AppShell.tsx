@@ -23,7 +23,7 @@ import {
   type DownloadFilter,
 } from "../lib/jobs";
 import { formatBytes } from "../lib/format";
-import { modifierKey } from "../lib/platform";
+import { isEditable, modifierKey } from "../lib/platform";
 
 const filters: Array<{ filter: DownloadFilter; icon: LucideIcon }> = [
   { filter: "all", icon: Layers },
@@ -32,15 +32,11 @@ const filters: Array<{ filter: DownloadFilter; icon: LucideIcon }> = [
   { filter: "stopped", icon: CircleStop },
 ];
 
-function isEditable(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable ||
-      ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-  );
-}
 
-/** Ctrl/⌘+N, Ctrl/⌘+comma, Ctrl/⌘+B, Escape, and pasting a link anywhere outside a field. */
+/**
+ * Ctrl/⌘+N, Ctrl/⌘+comma, Ctrl/⌘+B, pasting a link anywhere outside a field, and
+ * for the downloads list Ctrl/⌘+A, Delete, and Escape.
+ */
 function useGlobalShortcuts() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -56,13 +52,28 @@ function useGlobalShortcuts() {
         event.preventDefault();
         store.toggleSidebar();
       } else if (
-        event.key === "Escape" &&
-        store.inspector &&
-        !store.newDownloadOpen &&
-        !store.settingsOpen &&
-        !isEditable(event.target)
+        store.newDownloadOpen ||
+        store.settingsOpen ||
+        store.removing ||
+        isEditable(event.target)
       ) {
-        store.closeInspector();
+        // The rest belong to the downloads list.
+      } else if (modifier && !event.shiftKey && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        store.pickAll();
+      } else if (event.key === "Delete") {
+        const selected = store.picked.length
+          ? store.picked
+          : store.inspector?.kind === "job"
+            ? [store.inspector.id]
+            : [];
+        if (selected.length) {
+          event.preventDefault();
+          store.requestRemove(selected);
+        }
+      } else if (event.key === "Escape") {
+        if (store.picked.length) store.clearPicked();
+        else if (store.inspector) store.closeInspector();
       }
     };
     const onPaste = (event: ClipboardEvent) => {

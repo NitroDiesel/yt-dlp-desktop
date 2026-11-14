@@ -72,7 +72,7 @@ export default function App() {
       <QueueView />
       {settingsOpen && <SettingsView />}
       {newDownloadOpen && <NewDownloadDialog />}
-      {removing && <RemoveDownloadDialog key={removing} jobId={removing} />}
+      {removing && <RemoveDownloadDialog removal={removing} />}
     </AppShell>
   );
 }

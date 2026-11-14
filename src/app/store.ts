@@ -6,6 +6,7 @@ import {
   hasDeletableFile,
   isRunning,
   isVideoInPlaylist,
+  visibleDownloads,
   type DownloadFilter,
 } from "../lib/jobs";
 import type {
@@ -37,6 +38,15 @@ export interface AppUpdateState {
   error?: string;
 }
 
+/** A plain click picks one row; Ctrl/⌘ adds or drops a row; Shift picks a range. */
+export type SelectMode = "only" | "toggle" | "range";
+
+export interface PendingRemoval {
+  jobIds: string[];
+  /** Selected downloads left out because they are still running. */
+  skipped: number;
+}
+
 interface AppState {
   filter: DownloadFilter;
   /** Settings is a modal over the downloads list. */
@@ -44,9 +54,16 @@ interface AppState {
   settingsSection: SettingsSection;
   appUpdate?: AppUpdateState;
   inspector: Inspector;
+  /**
+   * Rows picked together with Ctrl/⌘ or Shift, Select all, or Ctrl/⌘+A, in table
+   * order. Empty when only the row in Download details is selected.
+   */
+  picked: string[];
+  /** Where the next Shift-click range starts. */
+  pickAnchor?: string;
   newDownloadOpen: boolean;
-  /** Download waiting in the Remove dialog for the keep-or-delete-file choice. */
-  removing?: string;
+  /** Downloads waiting in the Remove dialog for the keep-or-delete-files choice. */
+  removing?: PendingRemoval;
   /** Hidden sidebar; remembered on this device across launches. */
   sidebarCollapsed: boolean;
   /** Link in the New download dialog; also filled by paste-anywhere. */
@@ -71,7 +88,10 @@ interface AppState {
   installAppUpdate: () => Promise<void>;
   openNewDownload: (url?: string) => void;
   closeNewDownload: () => void;
-  selectJob: (jobId: string) => void;
+  selectJob: (jobId: string, mode?: SelectMode) => void;
+  /** Picks every row in the current filter. */
+  pickAll: () => void;
+  clearPicked: () => void;
   closeInspector: () => void;
   toggleSidebar: () => void;
   setDraftUrl: (url: string) => void;
@@ -86,10 +106,17 @@ interface AppState {
   updateJob: (job: DownloadJob) => void;
   cancel: (jobId: string) => Promise<void>;
   retry: (jobId: string) => Promise<void>;
-  /** Removes at once, or asks first when there is a file that could be deleted too. */
-  requestRemove: (jobId: string) => void;
+  /**
+   * Removes a single download at once, or asks first when a file could be deleted
+   * too or several downloads go together. Running downloads are left out.
+   */
+  requestRemove: (jobIds: string | string[]) => void;
   cancelRemove: () => void;
-  removeJob: (jobId: string, deleteFile?: boolean) => Promise<void>;
+  /**
+   * Removes downloads from the list, first moving their files to the trash when
+   * asked. A download whose file can't be moved stays, and so does the dialog.
+   */
+  removeJobs: (jobIds: string[], deleteFiles?: boolean) => Promise<void>;
   clearCompleted: () => Promise<void>;
   reorder: (jobId: string, direction: "up" | "down") => Promise<void>;
   setPaused: (paused: boolean) => Promise<void>;
@@ -144,6 +171,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   settingsOpen: false,
   settingsSection: "downloads",
   inspector: null,
+  picked: [],
   newDownloadOpen: false,
   sidebarCollapsed: readSidebarCollapsed(),
   draftUrl: "",
@@ -155,7 +183,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   isAnalyzing: false,
   analysisRevision: 0,
   showDownloads: (filter) =>
-    set((state) => ({ settingsOpen: false, filter: filter ?? state.filter })),
+    set((state) =>
+      filter && filter !== state.filter
+        ? { settingsOpen: false, filter, picked: [], pickAnchor: undefined }
+        : { settingsOpen: false },
+    ),
   showSettings: (section) =>
     set((state) => ({
       settingsOpen: true,
@@ -205,7 +237,33 @@ export const useAppStore = create<AppState>((set, get) => ({
       analyzeError: undefined,
     });
   },
-  selectJob: (jobId) => set({ inspector: { kind: "job", id: jobId } }),
+  selectJob: (jobId, mode = "only") => {
+    if (mode === "only") {
+      set({ inspector: { kind: "job", id: jobId }, picked: [], pickAnchor: jobId });
+      return;
+    }
+    const { queue, history, filter, inspector, picked, pickAnchor } = get();
+    const order = visibleDownloads(queue, history, filter).map((job) => job.id);
+    // Picking more rows starts from the row already open in Download details.
+    const open = inspector?.kind === "job" && order.includes(inspector.id) ? inspector.id : undefined;
+    const current = new Set(picked.length > 0 ? picked : open ? [open] : []);
+    if (mode === "toggle") {
+      if (current.has(jobId)) current.delete(jobId);
+      else current.add(jobId);
+      set({ picked: order.filter((id) => current.has(id)), pickAnchor: jobId });
+      return;
+    }
+    const from = order.indexOf(pickAnchor ?? open ?? jobId);
+    const to = order.indexOf(jobId);
+    const start = from < 0 ? to : Math.min(from, to);
+    const end = from < 0 ? to : Math.max(from, to);
+    set({ picked: order.slice(start, end + 1) });
+  },
+  pickAll: () => {
+    const { queue, history, filter } = get();
+    set({ picked: visibleDownloads(queue, history, filter).map((job) => job.id) });
+  },
+  clearPicked: () => set({ picked: [] }),
   closeInspector: () => set({ inspector: null }),
   toggleSidebar: () => {
     const sidebarCollapsed = !get().sidebarCollapsed;
@@ -307,29 +365,51 @@ export const useAppStore = create<AppState>((set, get) => ({
           : state.inspector,
     }));
   },
-  requestRemove: (jobId) => {
+  requestRemove: (jobIds) => {
     const { queue, history } = get();
-    const job = findJob(queue, history, jobId);
-    if (job && hasDeletableFile(job)) set({ removing: jobId });
-    else void get().removeJob(jobId);
+    const jobs = (Array.isArray(jobIds) ? jobIds : [jobIds])
+      .map((id) => findJob(queue, history, id))
+      .filter((job): job is DownloadJob => job !== undefined);
+    const removable = jobs.filter((job) => !isRunning(job.status));
+    if (removable.length === 0) return;
+    const ids = removable.map((job) => job.id);
+    if (jobs.length === 1 && !hasDeletableFile(removable[0])) void get().removeJobs(ids);
+    else set({ removing: { jobIds: ids, skipped: jobs.length - removable.length } });
   },
   cancelRemove: () => set({ removing: undefined }),
-  removeJob: async (jobId, deleteFile = false) => {
+  removeJobs: async (jobIds, deleteFiles = false) => {
     const { queue, history } = get();
-    if (deleteFile) await appApi.trashJobOutput(jobId);
-    await Promise.all([
-      queue.some((job) => job.id === jobId) && appApi.removeQueueJob(jobId),
-      history.some((job) => job.id === jobId) && appApi.removeHistory(jobId),
-    ]);
+    const results = await Promise.allSettled(
+      jobIds.map(async (jobId) => {
+        const job = findJob(queue, history, jobId);
+        if (deleteFiles && job && hasDeletableFile(job)) await appApi.trashJobOutput(jobId);
+        await Promise.all([
+          queue.some((item) => item.id === jobId) && appApi.removeQueueJob(jobId),
+          history.some((item) => item.id === jobId) && appApi.removeHistory(jobId),
+        ]);
+      }),
+    );
+    const failures = results.flatMap((result, index) =>
+      result.status === "rejected" ? [{ id: jobIds[index], reason: result.reason }] : [],
+    );
+    const failed = new Set(failures.map((failure) => failure.id));
+    const removed = new Set(jobIds.filter((id) => !failed.has(id)));
     set((state) => ({
-      queue: state.queue.filter((job) => job.id !== jobId),
-      history: state.history.filter((job) => job.id !== jobId),
-      removing: state.removing === jobId ? undefined : state.removing,
+      queue: state.queue.filter((job) => !removed.has(job.id)),
+      history: state.history.filter((job) => !removed.has(job.id)),
+      picked: state.picked.filter((id) => !removed.has(id)),
+      removing:
+        state.removing && failures.length > 0
+          ? { jobIds: [...failed], skipped: 0 }
+          : undefined,
       inspector:
-        state.inspector?.kind === "job" && state.inspector.id === jobId
+        state.inspector?.kind === "job" && removed.has(state.inspector.id)
           ? null
           : state.inspector,
     }));
+    if (failures.length === 1) throw failures[0].reason;
+    if (failures.length > 1)
+      throw `${failures.length} downloads couldn't be removed, so they stay in the list. ${String(failures[0].reason)}`;
   },
   clearCompleted: async () => {
     await appApi.clearCompleted();

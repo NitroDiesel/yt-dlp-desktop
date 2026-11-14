@@ -77,7 +77,7 @@ describe("JobRow", () => {
     expect(mocks.revealJobOutput).toHaveBeenCalledWith("completed-job");
 
     await user.click(screen.getByRole("button", { name: /Downloaded track/ }));
-    expect(onSelect).toHaveBeenCalledWith("completed-job");
+    expect(onSelect).toHaveBeenCalledWith("completed-job", "only");
   });
 
   it("shows live progress and can cancel a running download", async () => {

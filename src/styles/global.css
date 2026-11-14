@@ -1096,6 +1096,14 @@ input[type="range"] {
   letter-spacing: 0;
 }
 
+.selection-count {
+  padding: 0 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* Framed like a desktop list control; columns drop out as the table narrows. */
 .job-table {
   flex: 1;
