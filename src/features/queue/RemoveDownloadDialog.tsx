@@ -1,19 +1,31 @@
 import { useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { AlertCircle } from "lucide-react";
-import { useAppStore } from "../../app/store";
-import { findJob, jobTitle } from "../../lib/jobs";
+import { useAppStore, type PendingRemoval } from "../../app/store";
+import { findJob, hasDeletableFile, jobTitle } from "../../lib/jobs";
 import { trashName } from "../../lib/platform";
+import type { DownloadJob } from "../../types/contracts";
+
+function plural(count: number, one: string, many: string) {
+  return `${count} ${count === 1 ? one : many}`;
+}
 
 /**
- * Asks whether removing a finished download should also delete its file. The file
- * goes to the Recycle Bin or Trash, so a wrong choice can be undone there.
+ * Asks before removing downloads from the list, and whether their finished files
+ * go too. Files go to the Recycle Bin or Trash, so a wrong choice can be undone there.
  */
-export function RemoveDownloadDialog({ jobId }: { jobId: string }) {
-  const job = useAppStore((state) => findJob(state.queue, state.history, jobId));
-  const removeJob = useAppStore((state) => state.removeJob);
+export function RemoveDownloadDialog({ removal }: { removal: PendingRemoval }) {
+  const jobs = useAppStore(
+    useShallow((state) =>
+      removal.jobIds
+        .map((id) => findJob(state.queue, state.history, id))
+        .filter((job): job is DownloadJob => job !== undefined),
+    ),
+  );
+  const removeJobs = useAppStore((state) => state.removeJobs);
   const cancelRemove = useAppStore((state) => state.cancelRemove);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [deleteFile, setDeleteFile] = useState(false);
+  const [deleteFiles, setDeleteFiles] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -23,16 +35,25 @@ export function RemoveDownloadDialog({ jobId }: { jobId: string }) {
   }, []);
 
   useEffect(() => {
-    if (!job) cancelRemove();
-  }, [job, cancelRemove]);
+    if (jobs.length === 0) cancelRemove();
+  }, [jobs.length, cancelRemove]);
 
-  if (!job) return null;
+  if (jobs.length === 0) return null;
+
+  const single = jobs.length === 1 ? jobs[0] : undefined;
+  const files = jobs.filter(hasDeletableFile).length;
+  const keptPlaylists = jobs.some(
+    (job) => job.request.isPlaylist && job.status === "completed",
+  );
 
   async function confirm() {
     setRemoving(true);
     setError(undefined);
     try {
-      await removeJob(jobId, deleteFile);
+      await removeJobs(
+        jobs.map((job) => job.id),
+        deleteFiles,
+      );
     } catch (reason) {
       setError(String(reason));
       setRemoving(false);
@@ -51,26 +72,40 @@ export function RemoveDownloadDialog({ jobId }: { jobId: string }) {
       }}
     >
       <header className="task-dialog__header">
-        <h2 id="remove-download-title">Remove download</h2>
+        <h2 id="remove-download-title">
+          {single ? "Remove download" : `Remove ${jobs.length} downloads`}
+        </h2>
       </header>
       <div className="task-dialog__body">
         <p id="remove-download-question">
-          Remove <strong>{jobTitle(job)}</strong> from the list?
+          {single ? (
+            <>
+              Remove <strong>{jobTitle(single)}</strong> from the list?
+            </>
+          ) : (
+            `Remove ${jobs.length} downloads from the list?`
+          )}
+          {removal.skipped > 0 &&
+            ` ${plural(removal.skipped, "active download stays", "active downloads stay")}.`}
         </p>
-        <label className="confirm-dialog__option">
-          <input
-            type="checkbox"
-            checked={deleteFile}
-            disabled={removing}
-            onChange={(event) => setDeleteFile(event.target.checked)}
-          />
-          <span>
-            Also delete the file
-            <small title={job.outputPath}>
-              It goes to the {trashName}, where you can restore it.
-            </small>
-          </span>
-        </label>
+        {files > 0 && (
+          <label className="confirm-dialog__option">
+            <input
+              type="checkbox"
+              checked={deleteFiles}
+              disabled={removing}
+              onChange={(event) => setDeleteFiles(event.target.checked)}
+            />
+            <span>
+              {single ? "Also delete the file" : `Also delete ${plural(files, "file", "files")}`}
+              <small title={single?.outputPath}>
+                {files === 1 ? "It goes" : "They go"} to the {trashName}, where you can
+                restore {files === 1 ? "it" : "them"}.
+                {keptPlaylists && " Playlist files stay in their folders."}
+              </small>
+            </span>
+          </label>
+        )}
       </div>
       <footer className="task-dialog__footer">
         {error && (
@@ -94,7 +129,11 @@ export function RemoveDownloadDialog({ jobId }: { jobId: string }) {
           disabled={removing}
           onClick={() => void confirm()}
         >
-          {deleteFile ? "Remove and delete file" : "Remove"}
+          {deleteFiles
+            ? single
+              ? "Remove and delete file"
+              : `Remove and delete ${plural(files, "file", "files")}`
+            : "Remove"}
         </button>
       </footer>
     </dialog>

@@ -10,6 +10,15 @@ export const trashName =
     ? "Recycle Bin"
     : "Trash";
 
+/** Whether a key or paste event belongs to a text field rather than the app. */
+export function isEditable(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+  );
+}
+
 /** Label for the primary shortcut modifier on this platform. */
 export const modifierKey = isApple ? "⌘" : "Ctrl";
 

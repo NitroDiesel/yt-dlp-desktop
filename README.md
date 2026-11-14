@@ -48,7 +48,7 @@ There are good yt-dlp front-ends already, such as [Parabolic](https://github.com
 - Exact stream picking, codec preference, subtitles in any offered language, embedded metadata, thumbnails, and chapters.
 - Downloads only part of a video, with a preview that plays just the selected part, and exact cuts or a faster keyframe cut.
 - Downloads list filtered by Downloading, Completed, and Stopped, with pause, reorder, retry, cancel, open, and show in folder.
-- Remove a download from the list and choose whether to keep its file or move it to the Recycle Bin or Trash.
+- Remove a download from the list and choose whether to keep its file or move it to the Recycle Bin or Trash. Select several with Ctrl/⌘-click, Shift-click, Select all, or Ctrl/⌘+A, then remove them, and optionally their files, in one step.
 - Remembers your last folder, accent color, theme, and sidebar layout.
 - Optional re-encode to H.264, HEVC, or AV1 on an NVIDIA or AMD GPU.
 

@@ -63,6 +63,16 @@ export function mergeDownloads(
   return [...inProgress, ...done];
 }
 
+/** The rows a sidebar filter shows, in table order. */
+export function visibleDownloads(
+  queue: DownloadJob[],
+  history: DownloadJob[],
+  filter: DownloadFilter,
+): DownloadJob[] {
+  const all = mergeDownloads(queue, history);
+  return filter === "all" ? all : all.filter((job) => filterFor(job.status) === filter);
+}
+
 /**
  * Counts per sidebar filter. Runs on every progress event, so it skips the
  * sort in mergeDownloads; the queue's copy of a job wins, as it does there.

@@ -14,6 +14,7 @@ import { formatBytes, formatDuration } from "../../lib/format";
 import { savedThumbnail } from "../../lib/platform";
 import { isRunning, isStopped, jobMeta, jobTitle } from "../../lib/jobs";
 import type { DownloadJob } from "../../types/contracts";
+import type { SelectMode } from "../../app/store";
 
 function percentOf(job: DownloadJob): number {
   if (job.status === "completed" || job.status === "post_processing") return 100;
@@ -35,7 +36,7 @@ export const JobRow = memo(function JobRow({
   job: DownloadJob;
   selected: boolean;
   /** Pass stable store actions so the memo holds. */
-  onSelect: (jobId: string) => void;
+  onSelect: (jobId: string, mode: SelectMode) => void;
   onCancel: (jobId: string) => Promise<void>;
   onRetry: (jobId: string) => Promise<void>;
   onRemove: (jobId: string) => void;
@@ -71,7 +72,12 @@ export const JobRow = memo(function JobRow({
         className="job-row__select"
         aria-current={selected ? "true" : undefined}
         aria-label={`${title}, ${job.status.replaceAll("_", " ")}`}
-        onClick={() => onSelect(job.id)}
+        onClick={(event) =>
+          onSelect(
+            job.id,
+            event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle" : "only",
+          )
+        }
       >
         <span className="job-cell job-cell--name">
           <span className="job-thumb" aria-hidden="true">
