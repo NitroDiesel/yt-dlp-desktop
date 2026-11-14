@@ -1,0 +1,10 @@
+# Read by `cargo audit` (and the CI security job) when run from src-tauri.
+[advisories]
+ignore = [
+  # libsqlite3-sys bundles SQLite 3.53, which can return stale page-cache memory
+  # when it opens a database together with a crafted -wal file. The app opens only
+  # its own database in its per-user data folder, so an attacker would already
+  # need write access to that folder. The fix is libsqlite3-sys 0.39, but sqlx
+  # 0.9.0 (the latest release) requires <0.38. Remove this once sqlx allows 0.39.
+  "RUSTSEC-2026-0459",
+]
