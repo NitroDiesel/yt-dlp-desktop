@@ -51,6 +51,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: src-tauri
+          # The action ignores audit.toml, so repeat its list here; reasons are there.
+          ignore: RUSTSEC-2026-0459
 
   native:
     timeout-minutes: 45
